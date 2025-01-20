@@ -48,14 +48,18 @@ private:
     void InitStatusBar();
     void InitSequenceFigure();
 
-    // Slots
+    // Slots-File
     void OpenPulseqFile();
     void ReOpenPulseqFile();
+
+    // Slots-View
+    void ResetView();
+
+    // Slots-Interaction
     void onMousePress(QMouseEvent* event);
     void onMouseMove(QMouseEvent* event);
     void onMouseRelease(QMouseEvent* event);
     void DrawRFWaveform(const double& dStartTime = 0, double dEndTime = -1);
-
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 

@@ -59,6 +59,7 @@
      <string>View</string>
     </property>
     <addaction name="actionColorSettings"/>
+    <addaction name="actionResetView"/>
    </widget>
    <widget class="QMenu" name="menuAnalysis">
     <property name="title">
@@ -84,6 +85,21 @@
      <height>25</height>
     </size>
    </property>
+  </widget>
+  <widget class="QToolBar" name="toolBar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionOpen"/>
+   <addaction name="actionReopen"/>
+   <addaction name="actionCloseFile"/>
+   <addaction name="actionResetView"/>
   </widget>
   <action name="actionOpen">
    <property name="icon">
@@ -116,6 +132,9 @@
    </property>
   </action>
   <action name="actionReopen">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::DocumentOpenRecent"/>
+   </property>
    <property name="text">
     <string>Reopen</string>
    </property>
@@ -126,6 +145,9 @@
    </property>
   </action>
   <action name="actionCloseFile">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::EditClear"/>
+   </property>
    <property name="text">
     <string>Close File</string>
    </property>
@@ -141,6 +163,14 @@
    </property>
    <property name="text">
     <string>About</string>
+   </property>
+  </action>
+  <action name="actionResetView">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::ViewRestore"/>
+   </property>
+   <property name="text">
+    <string>Reset View</string>
    </property>
   </action>
  </widget>

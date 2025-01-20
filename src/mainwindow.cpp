@@ -42,9 +42,15 @@ void MainWindow::Init()
 
 void MainWindow::InitSlots()
 {
+    // File
     connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::OpenPulseqFile);
     connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::ReOpenPulseqFile);
     connect(ui->actionCloseFile, &QAction::triggered, this, &MainWindow::ClosePulseqFile);
+
+    // View
+    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::ResetView);
+
+    // Interaction
     connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
     connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
     connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
@@ -150,6 +156,11 @@ void MainWindow::ReOpenPulseqFile()
     }
 }
 
+void MainWindow::ResetView()
+{
+    DrawRFWaveform(0, -1);
+}
+
 void MainWindow::ClearPulseqCache()
 {
     m_pVersionLabel->setText("");
@@ -188,10 +199,12 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
     ClearPulseqCache();
     if (!m_spPulseqSeq->load(sPulseqFilePath.toStdString()))
     {
+        this->setEnabled(false);
         std::stringstream sLog;
         sLog << "Load " << sPulseqFilePath.toStdString() << " failed!";
         std::cout << sLog.str() << "\n";
         QMessageBox::critical(this, "File Error", sLog.str().c_str());
+        this->setEnabled(true);
         return false;
     }
     this->setWindowFilePath(sPulseqFilePath);
@@ -383,7 +396,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
         if(x1 > x2) std::swap(x1, x2);
 
         // 如果选择范围太小，认为是点击事件，不进行缩放
-        if(qAbs(x2 - x1) > 1.0) {  // 可以调整这个阈值
+        if(qAbs(x2 - x1) > 5.0) {  // 可以调整这个阈值
             // 设置新的显示范围
             ui->customPlot->xAxis->setRange(x1, x2);
             DrawRFWaveform(x1, x2);
