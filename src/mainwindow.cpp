@@ -12,6 +12,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_spPulseqSeq(std::make_shared<ExternalSequence>())
     , m_lRfNum(0)
     , m_bIsSelecting(false)
+    , m_bIsDragging(false)
     , m_dTotalDuration_us(0.)
     , m_dDragStartRange(0.)
 {
@@ -23,6 +24,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_pSelectionRect = new QCPItemRect(ui->customPlot);
     m_pSelectionRect->setVisible(false);
+    m_pSelectionRect->setBrush(QBrush(QColor(128, 128, 128, 128)));
+    m_pSelectionRect->setPen(QPen(Qt::black, 1));
 }
 
 MainWindow::~MainWindow()
@@ -320,7 +323,7 @@ bool MainWindow::LoadPulseqEvents()
 void MainWindow::onMousePress(QMouseEvent *event)
 {
     if (m_vecSeqBlocks.size() == 0) return;
-    if (m_vecRfLib.size() == 0) return;
+    // if (m_vecRfLib.size() == 0) return;
     if (event->button() == Qt::LeftButton)
     {
         ui->customPlot->setInteractions(QCP::Interactions());
@@ -338,6 +341,9 @@ void MainWindow::onMousePress(QMouseEvent *event)
     }
     else if (event->button() == Qt::RightButton)
     {
+        m_bIsDragging = true;
+        setCursor(Qt::ClosedHandCursor);
+        std::cout << "right button is clicked!/n";
         m_objDragStartPos = event->pos();
         m_dDragStartRange = ui->customPlot->xAxis->range().lower;
     }
@@ -346,14 +352,20 @@ void MainWindow::onMousePress(QMouseEvent *event)
 void MainWindow::onMouseMove(QMouseEvent *event)
 {
     if (m_vecSeqBlocks.size() == 0) return;
-    if (m_vecRfLib.size() == 0) return;
+    // if (m_vecRfLib.size() == 0) return;
     if(m_bIsSelecting)
     {
+        double yMin = ui->customPlot->yAxis->range().lower;
+        double yMax = ui->customPlot->yAxis->range().upper;
         // 更新选择框
         double x1 = ui->customPlot->xAxis->pixelToCoord(m_objSelectStartPos.x());
         double y1 = ui->customPlot->yAxis->pixelToCoord(m_objSelectStartPos.y());
         double x2 = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
         double y2 = ui->customPlot->yAxis->pixelToCoord(event->pos().y());
+
+        // 限制 y 值在有效范围内
+        y1 = qBound(yMin, y1, yMax);
+        y2 = qBound(yMin, y2, yMax);
 
         m_pSelectionRect->topLeft->setCoords(qMin(x1, x2), qMax(y1, y2));
         m_pSelectionRect->bottomRight->setCoords(qMax(x1, x2), qMin(y1, y2));
@@ -362,7 +374,7 @@ void MainWindow::onMouseMove(QMouseEvent *event)
     }
     else if (event->button() == Qt::RightButton)
     {
-        ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
+        // ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
         // 计算鼠标移动的距离对应的坐标值变化
         int pixelDelta = event->pos().x() - m_objDragStartPos.x();
         double coordDelta = ui->customPlot->xAxis->pixelToCoord(pixelDelta) - ui->customPlot->xAxis->pixelToCoord(0);
@@ -392,14 +404,27 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
         double x1 = ui->customPlot->xAxis->pixelToCoord(m_objSelectStartPos.x());
         double x2 = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
 
-        // 确保 x1 < x2
-        if(x1 > x2) std::swap(x1, x2);
-
         // 如果选择范围太小，认为是点击事件，不进行缩放
-        if(qAbs(x2 - x1) > 5.0) {  // 可以调整这个阈值
-            // 设置新的显示范围
-            ui->customPlot->xAxis->setRange(x1, x2);
-            DrawRFWaveform(x1, x2);
+        if(qAbs(x2 - x1) > 5.0) 
+        {  
+            if (x2 > x1)
+            {
+                ui->customPlot->xAxis->setRange(x1, x2);
+                DrawRFWaveform(x1, x2);
+            }
+            else
+            {
+                QCPRange currentRange = ui->customPlot->xAxis->range();
+                double center = (currentRange.lower + currentRange.upper) / 2;
+                double newSpan = currentRange.size() * 3;  // 可以调整这个倍数
+
+                double x1New = center - newSpan / 2;
+                double x2New = center + newSpan / 2;
+
+                x1New = x1New < 0 ? 0 : x1New;
+                x2New = x2New > m_dTotalDuration_us ? m_dTotalDuration_us : x2New;
+                DrawRFWaveform(x1New, x2New);
+            }
         }
     }
 }
