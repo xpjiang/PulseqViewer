@@ -47,6 +47,7 @@ private:
     void InitSlots();
     void InitStatusBar();
     void InitSequenceFigure();
+    void UpdatePlotRange(const double& x1, const double& x2);
 
     // Slots-File
     void OpenPulseqFile();
@@ -68,7 +69,7 @@ private:
     bool LoadPulseqFile(const QString& sPulseqFilePath);
     bool ClosePulseqFile();
     bool LoadPulseqEvents();
-    bool IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples);
+    //bool IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples);
 
 private:
     Ui::MainWindow                       *ui;

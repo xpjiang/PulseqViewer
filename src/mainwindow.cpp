@@ -116,6 +116,12 @@ void MainWindow::InitSequenceFigure()
     m_pGxRect->axis(QCPAxis::atBottom)->setVisible(false);
 }
 
+void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
+{
+    ui->customPlot->xAxis->setRange(x1, x2);
+    ui->customPlot->replot();
+}
+
 void MainWindow::OpenPulseqFile()
 {
     m_sPulseqFilePath = QFileDialog::getOpenFileName(
@@ -148,7 +154,7 @@ void MainWindow::ReOpenPulseqFile()
 void MainWindow::ResetView()
 {
     if (m_sPulseqFilePathCache.isEmpty()) return;
-    DrawRFWaveform(0, -1);
+    UpdatePlotRange(0, m_dTotalDuration_us);
 }
 
 void MainWindow::ClearPulseqCache()
@@ -364,12 +370,12 @@ void MainWindow::onMouseMove(QMouseEvent *event)
         const QCPRange& xRange = ui->customPlot->xAxis->range();
         double xSpan = xRange.size();
 
-        double newX1 = m_dDragStartRange - dx;
-        double newX2 = newX1 + xSpan;
+        double x1New = m_dDragStartRange - dx;
+        double x2New = x1New + xSpan;
 
-        newX1 = newX1 < 0 ? 0 : newX1;
-        newX2 = newX2 > m_dTotalDuration_us ? m_dTotalDuration_us : newX2;
-        DrawRFWaveform(newX1, newX2);
+        x1New = x1New < 0 ? 0 : x1New;
+        x2New = x2New > m_dTotalDuration_us ? m_dTotalDuration_us : x2New;
+        UpdatePlotRange(x1New, x2New);
     }
 }
 
@@ -393,8 +399,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
         {  
             if (x2 > x1)
             {
-                ui->customPlot->xAxis->setRange(x1, x2);
-                DrawRFWaveform(x1, x2);
+                UpdatePlotRange(x1, x2);
             }
             else
             {
@@ -407,7 +412,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
 
                 x1New = x1New < 0 ? 0 : x1New;
                 x2New = x2New > m_dTotalDuration_us ? m_dTotalDuration_us : x2New;
-                DrawRFWaveform(x1New, x2New);
+                UpdatePlotRange(x1New, x2New);
             }
         }
     }
@@ -485,8 +490,7 @@ void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
         rfGraph->setSelectable(QCP::stWhole);
     }
 
-    ui->customPlot->xAxis->setRange(dStartTime, dEndTime);
-    ui->customPlot->replot();
+    UpdatePlotRange(dStartTime, dEndTime);
 }
 
 // 拖拽进入事件
