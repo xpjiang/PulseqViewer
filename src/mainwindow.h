@@ -116,6 +116,7 @@ private:
 
     // Interaction
     bool                                 m_bIsSelecting;
+    bool                                 m_bIsDragging;
     QPoint                               m_objSelectStartPos;
     QCPItemRect*                         m_pSelectionRect;
     QPoint                               m_objDragStartPos;       // 记录拖拽起始位置

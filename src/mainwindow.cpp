@@ -85,20 +85,6 @@ void MainWindow::InitSequenceFigure()
     m_pGxRect = new QCPAxisRect(ui->customPlot);
     m_pAdcRect = new QCPAxisRect(ui->customPlot);
 
-    // // 只允许水平方向拖拽
-    // m_pRfRect->setRangeDrag(Qt::Horizontal);    // 设置RF区域只能水平拖拽
-    // m_pGzRect->setRangeDrag(Qt::Horizontal);    // 对每个区域都设置
-    // m_pGyRect->setRangeDrag(Qt::Horizontal);
-    // m_pGxRect->setRangeDrag(Qt::Horizontal);
-    // m_pAdcRect->setRangeDrag(Qt::Horizontal);
-
-    // // 同样，对于缩放也可以只允许水平方向
-    // m_pRfRect->setRangeZoom(Qt::Horizontal);    // 设置只能水平缩放
-    // m_pGzRect->setRangeZoom(Qt::Horizontal);
-    // m_pGyRect->setRangeZoom(Qt::Horizontal);
-    // m_pGxRect->setRangeZoom(Qt::Horizontal);
-    // m_pAdcRect->setRangeZoom(Qt::Horizontal);
-
     ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
     ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
     ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
@@ -161,6 +147,7 @@ void MainWindow::ReOpenPulseqFile()
 
 void MainWindow::ResetView()
 {
+    if (m_sPulseqFilePathCache.isEmpty()) return;
     DrawRFWaveform(0, -1);
 }
 
@@ -323,7 +310,6 @@ bool MainWindow::LoadPulseqEvents()
 void MainWindow::onMousePress(QMouseEvent *event)
 {
     if (m_vecSeqBlocks.size() == 0) return;
-    // if (m_vecRfLib.size() == 0) return;
     if (event->button() == Qt::LeftButton)
     {
         ui->customPlot->setInteractions(QCP::Interactions());
@@ -343,7 +329,6 @@ void MainWindow::onMousePress(QMouseEvent *event)
     {
         m_bIsDragging = true;
         setCursor(Qt::ClosedHandCursor);
-        std::cout << "right button is clicked!/n";
         m_objDragStartPos = event->pos();
         m_dDragStartRange = ui->customPlot->xAxis->range().lower;
     }
@@ -352,7 +337,6 @@ void MainWindow::onMousePress(QMouseEvent *event)
 void MainWindow::onMouseMove(QMouseEvent *event)
 {
     if (m_vecSeqBlocks.size() == 0) return;
-    // if (m_vecRfLib.size() == 0) return;
     if(m_bIsSelecting)
     {
         double yMin = ui->customPlot->yAxis->range().lower;
@@ -372,20 +356,20 @@ void MainWindow::onMouseMove(QMouseEvent *event)
 
         ui->customPlot->replot();
     }
-    else if (event->button() == Qt::RightButton)
+    else if (m_bIsDragging)
     {
-        // ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
-        // 计算鼠标移动的距离对应的坐标值变化
-        int pixelDelta = event->pos().x() - m_objDragStartPos.x();
-        double coordDelta = ui->customPlot->xAxis->pixelToCoord(pixelDelta) - ui->customPlot->xAxis->pixelToCoord(0);
+        int pixelDx = event->pos().x() - m_objDragStartPos.x();
+        double dx = ui->customPlot->xAxis->pixelToCoord(pixelDx) - ui->customPlot->xAxis->pixelToCoord(0);
 
-        // 更新所有图表的x轴范围
-        QCPRange newRange = ui->customPlot->xAxis->range();
-        newRange.lower = m_dDragStartRange - coordDelta;
-        newRange.upper = newRange.lower + ui->customPlot->xAxis->range().size();
+        const QCPRange& xRange = ui->customPlot->xAxis->range();
+        double xSpan = xRange.size();
 
-        ui->customPlot->xAxis->setRange(newRange);
-        ui->customPlot->replot();
+        double newX1 = m_dDragStartRange - dx;
+        double newX2 = newX1 + xSpan;
+
+        newX1 = newX1 < 0 ? 0 : newX1;
+        newX2 = newX2 > m_dTotalDuration_us ? m_dTotalDuration_us : newX2;
+        DrawRFWaveform(newX1, newX2);
     }
 }
 
@@ -426,6 +410,11 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
                 DrawRFWaveform(x1New, x2New);
             }
         }
+    }
+    else if (event->button() == Qt::RightButton && m_bIsDragging)
+    {
+        m_bIsDragging = false;
+        setCursor(Qt::ArrowCursor);
     }
 }
 
