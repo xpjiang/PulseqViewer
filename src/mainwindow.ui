@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>648</height>
+    <height>674</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -44,7 +44,7 @@
       <string>Recent Files...</string>
      </property>
      <addaction name="separator"/>
-     <addaction name="actionClear_Menu"/>
+     <addaction name="actionClearMenu"/>
     </widget>
     <addaction name="actionOpen"/>
     <addaction name="actionReopen"/>
@@ -58,7 +58,21 @@
     <property name="title">
      <string>View</string>
     </property>
+    <widget class="QMenu" name="menuEnableAxis">
+     <property name="title">
+      <string>Enable Axis</string>
+     </property>
+     <addaction name="actionRF"/>
+     <addaction name="actionGZ"/>
+     <addaction name="actionGY"/>
+     <addaction name="actionGX"/>
+     <addaction name="actionADC"/>
+     <addaction name="actionTrigger"/>
+    </widget>
+    <addaction name="actionEnableAxisToolbar"/>
+    <addaction name="menuEnableAxis"/>
     <addaction name="actionColorSettings"/>
+    <addaction name="separator"/>
     <addaction name="actionResetView"/>
    </widget>
    <widget class="QMenu" name="menuAnalysis">
@@ -70,7 +84,6 @@
     <property name="title">
      <string>Help</string>
     </property>
-    <addaction name="actionAbout"/>
     <addaction name="actionContact"/>
    </widget>
    <addaction name="menuFile"/>
@@ -98,8 +111,9 @@
    </attribute>
    <addaction name="actionOpen"/>
    <addaction name="actionReopen"/>
-   <addaction name="actionCloseFile"/>
    <addaction name="actionResetView"/>
+   <addaction name="actionCloseFile"/>
+   <addaction name="actionRF"/>
   </widget>
   <action name="actionOpen">
    <property name="icon">
@@ -139,7 +153,7 @@
     <string>Reopen</string>
    </property>
   </action>
-  <action name="actionClear_Menu">
+  <action name="actionClearMenu">
    <property name="text">
     <string>Clear Menu</string>
    </property>
@@ -171,6 +185,80 @@
    </property>
    <property name="text">
     <string>Reset View</string>
+   </property>
+  </action>
+  <action name="actionRF">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>RF</string>
+   </property>
+  </action>
+  <action name="actionGZ">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>GZ</string>
+   </property>
+  </action>
+  <action name="actionGY">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>GY</string>
+   </property>
+  </action>
+  <action name="actionGX">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>GX</string>
+   </property>
+  </action>
+  <action name="actionADC">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>ADC</string>
+   </property>
+  </action>
+  <action name="actionTrigger">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Trigger</string>
+   </property>
+  </action>
+  <action name="actionEnableAxisToolbar">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Axis Toolbar</string>
    </property>
   </action>
  </widget>

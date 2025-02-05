@@ -46,12 +46,20 @@ void MainWindow::Init()
 void MainWindow::InitSlots()
 {
     // File
-    connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::OpenPulseqFile);
-    connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::ReOpenPulseqFile);
+    connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::SlotOpenPulseqFile);
+    connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::SlotReOpenPulseqFile);
     connect(ui->actionCloseFile, &QAction::triggered, this, &MainWindow::ClosePulseqFile);
 
     // View
-    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::ResetView);
+    connect(ui->actionEnableAxisToolbar, &QAction::triggered, this, &MainWindow::SlotEnableAxisToolbar);
+    connect(ui->actionRF, &QAction::triggered, this, &MainWindow::SlotEnableRFAxis);
+    connect(ui->actionGZ, &QAction::triggered, this, &MainWindow::SlotEnableGZAxis);
+    connect(ui->actionGY, &QAction::triggered, this, &MainWindow::SlotEnableGYAxis);
+    connect(ui->actionGX, &QAction::triggered, this, &MainWindow::SlotEnableGXAxis);
+    connect(ui->actionADC, &QAction::triggered, this, &MainWindow::SlotEnableADCAxis);
+    connect(ui->actionTrigger, &QAction::triggered, this, &MainWindow::SlotEnableTriggerAxis);
+
+    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::SlotResetView);
 
     // Interaction
     connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
@@ -85,6 +93,10 @@ void MainWindow::InitSequenceFigure()
     m_pGxRect = new QCPAxisRect(ui->customPlot);
     m_pAdcRect = new QCPAxisRect(ui->customPlot);
 
+    m_lRects = {
+        m_pRfRect, m_pGzRect, m_pGyRect, m_pGxRect, m_pAdcRect
+    };
+
     ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
     ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
     ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
@@ -103,10 +115,6 @@ void MainWindow::InitSequenceFigure()
     m_pAdcRect->axis(QCPAxis::atLeft)->setLabel("ADC");
 
     // share the same time axis
-    m_pRfRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pGzRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pGyRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pGxRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
     m_pAdcRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
 
     // Hide all time axis but the last one
@@ -114,6 +122,20 @@ void MainWindow::InitSequenceFigure()
     m_pGzRect->axis(QCPAxis::atBottom)->setVisible(false);
     m_pGyRect->axis(QCPAxis::atBottom)->setVisible(false);
     m_pGxRect->axis(QCPAxis::atBottom)->setVisible(false);
+
+    // 只允许水平方向拖拽
+    m_pRfRect->setRangeDrag(Qt::Horizontal);    // 设置RF区域只能水平拖拽
+    m_pGzRect->setRangeDrag(Qt::Horizontal);    // 对每个区域都设置
+    m_pGyRect->setRangeDrag(Qt::Horizontal);
+    m_pGxRect->setRangeDrag(Qt::Horizontal);
+    m_pAdcRect->setRangeDrag(Qt::Horizontal);
+
+    // 同样，对于缩放也可以只允许水平方向
+    m_pRfRect->setRangeZoom(Qt::Horizontal);    // 设置只能水平缩放
+    m_pGzRect->setRangeZoom(Qt::Horizontal);
+    m_pGyRect->setRangeZoom(Qt::Horizontal);
+    m_pGxRect->setRangeZoom(Qt::Horizontal);
+    m_pAdcRect->setRangeZoom(Qt::Horizontal);
 }
 
 void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
@@ -122,7 +144,16 @@ void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
     ui->customPlot->replot();
 }
 
-void MainWindow::OpenPulseqFile()
+void MainWindow::RestoreViewLayout()
+{
+    ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
+    ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
+    ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
+    ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
+    ui->customPlot->plotLayout()->addElement(4, 0, m_pAdcRect);
+}
+
+void MainWindow::SlotOpenPulseqFile()
 {
     m_sPulseqFilePath = QFileDialog::getOpenFileName(
         this,
@@ -142,7 +173,7 @@ void MainWindow::OpenPulseqFile()
     }
 }
 
-void MainWindow::ReOpenPulseqFile()
+void MainWindow::SlotReOpenPulseqFile()
 {
     if (m_sPulseqFilePathCache.size() > 0)
     {
@@ -151,7 +182,129 @@ void MainWindow::ReOpenPulseqFile()
     }
 }
 
-void MainWindow::ResetView()
+void MainWindow::SlotEnableAxisToolbar()
+{
+    const bool& isChecked = ui->actionEnableAxisToolbar->isChecked();
+    
+}
+
+void MainWindow::SlotEnableRFAxis()
+{
+    m_pRfRect->setVisible(ui->actionRF->isChecked());
+    if (!ui->actionRF->isChecked())
+    {
+        ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
+ /*       ui->customPlot->plotLayout()->clear();  
+        ui->customPlot->plotLayout()->addElement(0, 0, m_pGzRect);
+        ui->customPlot->plotLayout()->addElement(1, 0, m_pGyRect);
+        ui->customPlot->plotLayout()->addElement(2, 0, m_pGxRect);
+        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);*/
+    }
+    else
+    {
+        ui->customPlot->plotLayout()->elementAt(0)->setVisible(true);
+        //RestoreViewLayout();
+    }
+    ui->customPlot->plotLayout()->updateLayout();
+    ui->customPlot->replot();
+}
+
+void MainWindow::SlotEnableGZAxis()
+{
+    if (!ui->actionGZ->isChecked())
+    {
+        ui->customPlot->plotLayout()->take(m_pGzRect);
+        ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
+        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
+        ui->customPlot->plotLayout()->addElement(1, 0, m_pGyRect);
+        ui->customPlot->plotLayout()->addElement(2, 0, m_pGxRect);
+        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);
+    }
+    else
+    {
+        RestoreViewLayout();
+    }
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
+}
+
+void MainWindow::SlotEnableGYAxis()
+{
+    if (!ui->actionGY->isChecked())
+    {
+        ui->customPlot->plotLayout()->take(m_pGyRect);
+        ui->customPlot->plotLayout()->clear();
+        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
+        ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
+        ui->customPlot->plotLayout()->addElement(2, 0, m_pGxRect);
+        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);
+    }
+    else
+    {
+        RestoreViewLayout();
+    }
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
+}
+
+void MainWindow::SlotEnableGXAxis()
+{
+    if (!ui->actionGX->isChecked())
+    {
+        ui->customPlot->plotLayout()->take(m_pGxRect);
+        ui->customPlot->plotLayout()->clear();
+        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
+        ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
+        ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
+        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);
+    }
+    else
+    {
+        RestoreViewLayout();
+    }
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
+}
+
+void MainWindow::SlotEnableADCAxis()
+{
+    if (!ui->actionADC->isChecked())
+    {
+        ui->customPlot->plotLayout()->take(m_pAdcRect);
+        ui->customPlot->plotLayout()->clear();
+        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
+        ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
+        ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
+        ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
+    }
+    else
+    {
+        RestoreViewLayout();
+    }
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
+}
+
+void MainWindow::SlotEnableTriggerAxis()
+{
+    if (!ui->actionTrigger->isChecked())
+    {
+        //ui->customPlot->plotLayout()->take(m_pAdcRect);
+        //ui->customPlot->plotLayout()->clear();
+        //ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
+        //ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
+        //ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
+        //ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
+    }
+    else
+    {
+        RestoreViewLayout();
+    }
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
+}
+
+void MainWindow::SlotResetView()
 {
     if (m_sPulseqFilePathCache.isEmpty()) return;
     UpdatePlotRange(0, m_dTotalDuration_us);

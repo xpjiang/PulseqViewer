@@ -48,13 +48,21 @@ private:
     void InitStatusBar();
     void InitSequenceFigure();
     void UpdatePlotRange(const double& x1, const double& x2);
+    void RestoreViewLayout();
 
     // Slots-File
-    void OpenPulseqFile();
-    void ReOpenPulseqFile();
+    void SlotOpenPulseqFile();
+    void SlotReOpenPulseqFile();
+    void SlotEnableAxisToolbar();
+    void SlotEnableRFAxis();
+    void SlotEnableGZAxis();
+    void SlotEnableGYAxis();
+    void SlotEnableGXAxis();
+    void SlotEnableADCAxis();
+    void SlotEnableTriggerAxis();
 
     // Slots-View
-    void ResetView();
+    void SlotResetView();
 
     // Slots-Interaction
     void onMousePress(QMouseEvent* event);
@@ -114,6 +122,7 @@ private:
     QCPAxisRect*                         m_pGyRect;
     QCPAxisRect*                         m_pGxRect;
     QCPAxisRect*                         m_pAdcRect;
+    QList<QCPAxisRect*>                  m_lRects;
 
     // Interaction
     bool                                 m_bIsSelecting;
