@@ -69,7 +69,6 @@
      <addaction name="actionADC"/>
      <addaction name="actionTrigger"/>
     </widget>
-    <addaction name="actionEnableAxisToolbar"/>
     <addaction name="menuEnableAxis"/>
     <addaction name="actionColorSettings"/>
     <addaction name="separator"/>
