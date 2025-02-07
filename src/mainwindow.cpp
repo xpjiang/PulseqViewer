@@ -63,62 +63,45 @@ void MainWindow::InitSequenceFigure()
 
     ui->customPlot->setAntialiasedElements(QCP::aeAll);
     ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
-    m_pRfRect = new QCPAxisRect(ui->customPlot);
-    m_pGzRect = new QCPAxisRect(ui->customPlot);
-    m_pGyRect = new QCPAxisRect(ui->customPlot);
-    m_pGxRect = new QCPAxisRect(ui->customPlot);
-    m_pAdcRect = new QCPAxisRect(ui->customPlot);
+    m_mapRect["RF"] = new QCPAxisRect(ui->customPlot);
+    m_mapRect["GZ"] = new QCPAxisRect(ui->customPlot);
+    m_mapRect["GY"] = new QCPAxisRect(ui->customPlot);
+    m_mapRect["GX"] = new QCPAxisRect(ui->customPlot);
+    m_mapRect["ADC"] = new QCPAxisRect(ui->customPlot);
 
-    m_lRects = {
-        m_pRfRect, m_pGzRect, m_pGyRect, m_pGxRect, m_pAdcRect
-    };
+    ui->customPlot->plotLayout()->addElement(0, 0, m_mapRect["RF"]);
+    ui->customPlot->plotLayout()->addElement(1, 0, m_mapRect["GZ"]);
+    ui->customPlot->plotLayout()->addElement(2, 0, m_mapRect["GY"]);
+    ui->customPlot->plotLayout()->addElement(3, 0, m_mapRect["GX"]);
+    ui->customPlot->plotLayout()->addElement(4, 0, m_mapRect["ADC"]);
 
-    ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-    ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
-    ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
-    ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
-    ui->customPlot->plotLayout()->addElement(4, 0, m_pAdcRect);
-
-    m_pRfRect->setupFullAxesBox(true);
-    m_pRfRect->axis(QCPAxis::atLeft)->setLabel("RF (Hz)");
-    m_pGzRect->setupFullAxesBox(true);
-    m_pGzRect->axis(QCPAxis::atLeft)->setLabel("GZ (Hz/m)");
-    m_pGyRect->setupFullAxesBox(true);
-    m_pGyRect->axis(QCPAxis::atLeft)->setLabel("GY (Hz/m)");
-    m_pGxRect->setupFullAxesBox(true);
-    m_pGxRect->axis(QCPAxis::atLeft)->setLabel("GX (Hz/m)");
-    m_pAdcRect->setupFullAxesBox(true);
-    m_pAdcRect->axis(QCPAxis::atLeft)->setLabel("ADC");
+    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setLabel("RF (Hz)");
+    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setLabel("GZ (Hz/m)");
+    m_mapRect["GY"]->axis(QCPAxis::atLeft)->setLabel("GY (Hz/m)");
+    m_mapRect["GX"]->axis(QCPAxis::atLeft)->setLabel("GX (Hz/m)");
+    m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setLabel("ADC");
 
     // share the same time axis
-    m_pRfRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pGzRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pGyRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pGxRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_pAdcRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_mapRect["GZ"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_mapRect["GY"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_mapRect["GX"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_mapRect["ADC"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+
+    QMargins margins(70, 10, 10, 10);
+    foreach (auto& rect, m_mapRect)
+    {
+        rect->setMinimumMargins(margins);
+        rect->setRangeDrag(Qt::Horizontal);
+        rect->setRangeZoom(Qt::Horizontal);
+        rect->setupFullAxesBox(true);
+    }
 
     // Hide all time axis but the last one
-    m_pRfRect->axis(QCPAxis::atBottom)->setVisible(false);
-    m_pGzRect->axis(QCPAxis::atBottom)->setVisible(false);
-    m_pGyRect->axis(QCPAxis::atBottom)->setVisible(false);
-    m_pGxRect->axis(QCPAxis::atBottom)->setVisible(false);
-
-    // only Horizontal drag
-    m_pRfRect->setRangeDrag(Qt::Horizontal);
-    m_pGzRect->setRangeDrag(Qt::Horizontal);
-    m_pGyRect->setRangeDrag(Qt::Horizontal);
-    m_pGxRect->setRangeDrag(Qt::Horizontal);
-    m_pAdcRect->setRangeDrag(Qt::Horizontal);
-
-    // only Horizontal zoom
-    m_pRfRect->setRangeZoom(Qt::Horizontal);
-    m_pGzRect->setRangeZoom(Qt::Horizontal);
-    m_pGyRect->setRangeZoom(Qt::Horizontal);
-    m_pGxRect->setRangeZoom(Qt::Horizontal);
-    m_pAdcRect->setRangeZoom(Qt::Horizontal);
-
-    m_pRfRect->setMinimumMargins(QMargins(60, 10, 10, 5));
-    m_pGzRect->setMinimumMargins(QMargins(60, 10, 10, 5));
+    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setVisible(false);
+    m_mapRect["GZ"]->axis(QCPAxis::atBottom)->setVisible(false);
+    m_mapRect["GY"]->axis(QCPAxis::atBottom)->setVisible(false);
+    m_mapRect["GX"]->axis(QCPAxis::atBottom)->setVisible(false);
 }
 
 void MainWindow::InitSlots()
@@ -144,7 +127,8 @@ void MainWindow::InitSlots()
     connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
     connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
 
-    for (QCPAxisRect* rect1 : m_lRects)
+
+    foreach (auto& rect1, m_mapRect)
     {
         if (rect1)
         {
@@ -152,7 +136,8 @@ void MainWindow::InitSlots()
                     QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
                     this, &MainWindow::onAxisRangeChanged);
         }
-        for (QCPAxisRect* rect2 : m_lRects)
+
+        foreach (auto& rect2, m_mapRect)
         {
             if (rect1 != rect2)
             {
@@ -171,11 +156,6 @@ void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
 
 void MainWindow::RestoreViewLayout()
 {
-    ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-    ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
-    ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
-    ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
-    ui->customPlot->plotLayout()->addElement(4, 0, m_pAdcRect);
 }
 
 void MainWindow::SlotOpenPulseqFile()
@@ -215,7 +195,7 @@ void MainWindow::SlotEnableAxisToolbar()
 
 void MainWindow::SlotEnableRFAxis()
 {
-    m_pRfRect->setVisible(ui->actionRF->isChecked());
+    m_mapRect["RF"]->setVisible(ui->actionRF->isChecked());
     if (!ui->actionRF->isChecked())
     {
         ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
@@ -236,97 +216,22 @@ void MainWindow::SlotEnableRFAxis()
 
 void MainWindow::SlotEnableGZAxis()
 {
-    if (!ui->actionGZ->isChecked())
-    {
-        ui->customPlot->plotLayout()->take(m_pGzRect);
-        ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
-        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-        ui->customPlot->plotLayout()->addElement(1, 0, m_pGyRect);
-        ui->customPlot->plotLayout()->addElement(2, 0, m_pGxRect);
-        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);
-    }
-    else
-    {
-        RestoreViewLayout();
-    }
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableGYAxis()
 {
-    if (!ui->actionGY->isChecked())
-    {
-        ui->customPlot->plotLayout()->take(m_pGyRect);
-        ui->customPlot->plotLayout()->clear();
-        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-        ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
-        ui->customPlot->plotLayout()->addElement(2, 0, m_pGxRect);
-        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);
-    }
-    else
-    {
-        RestoreViewLayout();
-    }
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableGXAxis()
 {
-    if (!ui->actionGX->isChecked())
-    {
-        ui->customPlot->plotLayout()->take(m_pGxRect);
-        ui->customPlot->plotLayout()->clear();
-        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-        ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
-        ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
-        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);
-    }
-    else
-    {
-        RestoreViewLayout();
-    }
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableADCAxis()
 {
-    if (!ui->actionADC->isChecked())
-    {
-        ui->customPlot->plotLayout()->take(m_pAdcRect);
-        ui->customPlot->plotLayout()->clear();
-        ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-        ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
-        ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
-        ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
-    }
-    else
-    {
-        RestoreViewLayout();
-    }
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableTriggerAxis()
 {
-    if (!ui->actionTrigger->isChecked())
-    {
-        //ui->customPlot->plotLayout()->take(m_pAdcRect);
-        //ui->customPlot->plotLayout()->clear();
-        //ui->customPlot->plotLayout()->addElement(0, 0, m_pRfRect);
-        //ui->customPlot->plotLayout()->addElement(1, 0, m_pGzRect);
-        //ui->customPlot->plotLayout()->addElement(2, 0, m_pGyRect);
-        //ui->customPlot->plotLayout()->addElement(3, 0, m_pGxRect);
-    }
-    else
-    {
-        RestoreViewLayout();
-    }
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
 }
 
 void MainWindow::SlotResetView()
@@ -628,10 +533,10 @@ void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
         }
     }
     double margin = (dMaxAmp - dMinAmp) * 0.1;
-    m_pRfRect->axis(QCPAxis::atLeft)->setRange(dMinAmp - margin, dMaxAmp+ margin);
+    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dMinAmp - margin, dMaxAmp+ margin);
     QCPRange newRange(dStartTime, dEndTime);
-    m_pRfRect->axis(QCPAxis::atBottom)->setRange(newRange);
-    m_pAdcRect->axis(QCPAxis::atBottom)->setRange(newRange);
+    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
+    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
 
     // 只处理时间范围内的RF
     for(const auto& rfInfo : m_vecRfLib)
@@ -640,8 +545,8 @@ void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
         if(rfInfo.startAbsTime_us + rfInfo.duration_us < dStartTime) continue;
         if(rfInfo.startAbsTime_us > dEndTime) break;
 
-        QCPGraph* rfGraph = ui->customPlot->addGraph(m_pRfRect->axis(QCPAxis::atBottom),
-                                                     m_pRfRect->axis(QCPAxis::atLeft));
+        QCPGraph* rfGraph = ui->customPlot->addGraph(m_mapRect["RF"]->axis(QCPAxis::atBottom),
+                                                     m_mapRect["RF"]->axis(QCPAxis::atLeft));
         m_vecRfGraphs.append(rfGraph);
 
         const auto& rf = rfInfo.event;

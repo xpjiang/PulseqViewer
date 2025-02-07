@@ -118,12 +118,7 @@ private:
     // Plot
     QVector<QCPGraph*>                   m_vecRfGraphs;
 
-    QCPAxisRect*                         m_pRfRect;
-    QCPAxisRect*                         m_pGzRect;
-    QCPAxisRect*                         m_pGyRect;
-    QCPAxisRect*                         m_pGxRect;
-    QCPAxisRect*                         m_pAdcRect;
-    QList<QCPAxisRect*>                  m_lRects;
+    QMap<QString, QCPAxisRect*>          m_mapRect;
 
     // Interaction
     bool                                 m_bIsSelecting;
