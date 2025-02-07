@@ -38,33 +38,9 @@ MainWindow::~MainWindow()
 
 void MainWindow::Init()
 {
-    InitSlots();
     InitStatusBar();
     InitSequenceFigure();
-}
-
-void MainWindow::InitSlots()
-{
-    // File
-    connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::SlotOpenPulseqFile);
-    connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::SlotReOpenPulseqFile);
-    connect(ui->actionCloseFile, &QAction::triggered, this, &MainWindow::ClosePulseqFile);
-
-    // View
-    connect(ui->actionEnableAxisToolbar, &QAction::triggered, this, &MainWindow::SlotEnableAxisToolbar);
-    connect(ui->actionRF, &QAction::triggered, this, &MainWindow::SlotEnableRFAxis);
-    connect(ui->actionGZ, &QAction::triggered, this, &MainWindow::SlotEnableGZAxis);
-    connect(ui->actionGY, &QAction::triggered, this, &MainWindow::SlotEnableGYAxis);
-    connect(ui->actionGX, &QAction::triggered, this, &MainWindow::SlotEnableGXAxis);
-    connect(ui->actionADC, &QAction::triggered, this, &MainWindow::SlotEnableADCAxis);
-    connect(ui->actionTrigger, &QAction::triggered, this, &MainWindow::SlotEnableTriggerAxis);
-
-    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::SlotResetView);
-
-    // Interaction
-    connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
-    connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
-    connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
+    InitSlots();
 }
 
 void MainWindow::InitStatusBar()
@@ -115,6 +91,10 @@ void MainWindow::InitSequenceFigure()
     m_pAdcRect->axis(QCPAxis::atLeft)->setLabel("ADC");
 
     // share the same time axis
+    m_pRfRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_pGzRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_pGyRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+    m_pGxRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
     m_pAdcRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
 
     // Hide all time axis but the last one
@@ -123,19 +103,64 @@ void MainWindow::InitSequenceFigure()
     m_pGyRect->axis(QCPAxis::atBottom)->setVisible(false);
     m_pGxRect->axis(QCPAxis::atBottom)->setVisible(false);
 
-    // 只允许水平方向拖拽
-    m_pRfRect->setRangeDrag(Qt::Horizontal);    // 设置RF区域只能水平拖拽
-    m_pGzRect->setRangeDrag(Qt::Horizontal);    // 对每个区域都设置
+    // only Horizontal drag
+    m_pRfRect->setRangeDrag(Qt::Horizontal);
+    m_pGzRect->setRangeDrag(Qt::Horizontal);
     m_pGyRect->setRangeDrag(Qt::Horizontal);
     m_pGxRect->setRangeDrag(Qt::Horizontal);
     m_pAdcRect->setRangeDrag(Qt::Horizontal);
 
-    // 同样，对于缩放也可以只允许水平方向
-    m_pRfRect->setRangeZoom(Qt::Horizontal);    // 设置只能水平缩放
+    // only Horizontal zoom
+    m_pRfRect->setRangeZoom(Qt::Horizontal);
     m_pGzRect->setRangeZoom(Qt::Horizontal);
     m_pGyRect->setRangeZoom(Qt::Horizontal);
     m_pGxRect->setRangeZoom(Qt::Horizontal);
     m_pAdcRect->setRangeZoom(Qt::Horizontal);
+
+    m_pRfRect->setMinimumMargins(QMargins(60, 10, 10, 5));
+    m_pGzRect->setMinimumMargins(QMargins(60, 10, 10, 5));
+}
+
+void MainWindow::InitSlots()
+{
+    // File
+    connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::SlotOpenPulseqFile);
+    connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::SlotReOpenPulseqFile);
+    connect(ui->actionCloseFile, &QAction::triggered, this, &MainWindow::ClosePulseqFile);
+
+    // View
+    connect(ui->actionEnableAxisToolbar, &QAction::triggered, this, &MainWindow::SlotEnableAxisToolbar);
+    connect(ui->actionRF, &QAction::triggered, this, &MainWindow::SlotEnableRFAxis);
+    connect(ui->actionGZ, &QAction::triggered, this, &MainWindow::SlotEnableGZAxis);
+    connect(ui->actionGY, &QAction::triggered, this, &MainWindow::SlotEnableGYAxis);
+    connect(ui->actionGX, &QAction::triggered, this, &MainWindow::SlotEnableGXAxis);
+    connect(ui->actionADC, &QAction::triggered, this, &MainWindow::SlotEnableADCAxis);
+    connect(ui->actionTrigger, &QAction::triggered, this, &MainWindow::SlotEnableTriggerAxis);
+
+    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::SlotResetView);
+
+    // Interaction
+    connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
+    connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
+    connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
+
+    for (QCPAxisRect* rect1 : m_lRects)
+    {
+        if (rect1)
+        {
+            connect(rect1->axis(QCPAxis::atBottom),
+                    QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
+                    this, &MainWindow::onAxisRangeChanged);
+        }
+        for (QCPAxisRect* rect2 : m_lRects)
+        {
+            if (rect1 != rect2)
+            {
+                connect(rect1->axis(QCPAxis::atBottom), QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
+                        rect2->axis(QCPAxis::atBottom), QOverload<const QCPRange&>::of(&QCPAxis::setRange));
+            }
+        }
+    }
 }
 
 void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
@@ -646,7 +671,6 @@ void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
     UpdatePlotRange(dStartTime, dEndTime);
 }
 
-// 拖拽进入事件
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasUrls()) {
@@ -654,7 +678,6 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
     }
 }
 
-// 拖拽放下事件
 void MainWindow::dropEvent(QDropEvent *event)
 {
     const QMimeData* mimeData = event->mimeData();
@@ -672,6 +695,28 @@ void MainWindow::dropEvent(QDropEvent *event)
             return;
         }
         m_sPulseqFilePathCache = m_sPulseqFilePath;
+    }
+}
+
+void MainWindow::onAxisRangeChanged(const QCPRange& newRange)
+{
+    QCPAxis* axis = qobject_cast<QCPAxis*>(sender());
+    if (!axis) return;
+
+    // check if exceeding range
+    if (newRange.lower < 0 || newRange.upper > m_dTotalDuration_us) {
+        QCPRange boundedRange = newRange;
+        if (boundedRange.lower < 0)
+        {
+            boundedRange.lower = 0;
+            boundedRange.upper = qMin(0 + newRange.size(), m_dTotalDuration_us);
+        }
+        if (boundedRange.upper > m_dTotalDuration_us)
+        {
+            boundedRange.upper = m_dTotalDuration_us;
+            boundedRange.lower = qMax(m_dTotalDuration_us - newRange.size(), 0.);
+        }
+        axis->setRange(boundedRange);
     }
 }
 

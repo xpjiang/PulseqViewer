@@ -71,6 +71,7 @@ private:
     void DrawRFWaveform(const double& dStartTime = 0, double dEndTime = -1);
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void onAxisRangeChanged(const QCPRange &newRange);
 
     // Pulseq
     void ClearPulseqCache();

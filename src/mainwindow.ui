@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>674</height>
+    <height>690</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,7 +32,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>20</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -111,9 +111,16 @@
    </attribute>
    <addaction name="actionOpen"/>
    <addaction name="actionReopen"/>
-   <addaction name="actionResetView"/>
    <addaction name="actionCloseFile"/>
+   <addaction name="separator"/>
    <addaction name="actionRF"/>
+   <addaction name="actionGZ"/>
+   <addaction name="actionGY"/>
+   <addaction name="actionGX"/>
+   <addaction name="actionADC"/>
+   <addaction name="actionTrigger"/>
+   <addaction name="separator"/>
+   <addaction name="actionResetView"/>
   </widget>
   <action name="actionOpen">
    <property name="icon">
