@@ -89,12 +89,17 @@ void MainWindow::InitSequenceFigure()
     m_mapRect["ADC"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
 
     QMargins margins(70, 10, 10, 10);
+    QFont labelFont;
+    labelFont.setWeight(QFont::DemiBold);
     foreach (auto& rect, m_mapRect)
     {
         rect->setMinimumMargins(margins);
         rect->setRangeDrag(Qt::Horizontal);
         rect->setRangeZoom(Qt::Horizontal);
         rect->setupFullAxesBox(true);
+
+        // rect->axis(QCPAxis::atLeft)->setLabelPadding(30);
+        rect->axis(QCPAxis::atLeft)->setLabelFont(labelFont);
     }
 
     // Hide all time axis but the last one
@@ -102,6 +107,8 @@ void MainWindow::InitSequenceFigure()
     m_mapRect["GZ"]->axis(QCPAxis::atBottom)->setVisible(false);
     m_mapRect["GY"]->axis(QCPAxis::atBottom)->setVisible(false);
     m_mapRect["GX"]->axis(QCPAxis::atBottom)->setVisible(false);
+
+    m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setRange(0, 1.3);
 }
 
 void MainWindow::InitSlots()
@@ -195,22 +202,16 @@ void MainWindow::SlotEnableAxisToolbar()
 
 void MainWindow::SlotEnableRFAxis()
 {
-    m_mapRect["RF"]->setVisible(ui->actionRF->isChecked());
-    if (!ui->actionRF->isChecked())
+    const bool& isChecked = ui->actionRF->isChecked();
+    m_mapRect["RF"]->setVisible(isChecked);
+    if (isChecked)
     {
-        ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
- /*       ui->customPlot->plotLayout()->clear();  
-        ui->customPlot->plotLayout()->addElement(0, 0, m_pGzRect);
-        ui->customPlot->plotLayout()->addElement(1, 0, m_pGyRect);
-        ui->customPlot->plotLayout()->addElement(2, 0, m_pGxRect);
-        ui->customPlot->plotLayout()->addElement(3, 0, m_pAdcRect);*/
+
     }
     else
     {
-        ui->customPlot->plotLayout()->elementAt(0)->setVisible(true);
-        //RestoreViewLayout();
+        ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
     }
-    ui->customPlot->plotLayout()->updateLayout();
     ui->customPlot->replot();
 }
 
@@ -246,7 +247,7 @@ void MainWindow::ClearPulseqCache()
     m_pVersionLabel->setVisible(false);
     m_pProgressBar->hide();
 
-    if (NULL != ui->customPlot)  // 先检查 customPlot 是否有效
+    if (NULL != ui->customPlot)
     {
         ui->customPlot->clearGraphs();
         m_vecRfGraphs.clear();
@@ -300,7 +301,7 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
     std::cout << lSeqBlockNum << " blocks detected!\n";
     m_vecSeqBlocks.resize(lSeqBlockNum);
     m_pProgressBar->show();
-    uint8_t progress(0);
+    uint32_t progress(0);
     for (uint16_t ushBlockIndex=0; ushBlockIndex < lSeqBlockNum; ushBlockIndex++)
     {
         m_vecSeqBlocks[ushBlockIndex] = m_spPulseqSeq->GetBlock(ushBlockIndex);
@@ -317,7 +318,6 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
         progress = ushBlockIndex * 100 / lSeqBlockNum;
         m_pProgressBar->setValue(progress);
     }
-
 
     m_vecRfLib.reserve(m_lRfNum);
 
@@ -391,7 +391,7 @@ bool MainWindow::LoadPulseqEvents()
     }
 
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
-    DrawRFWaveform(0, -1);
+    DrawWaveform(0, -1);
 
     return true;
 }
@@ -506,15 +506,14 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
     }
 }
 
-void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
+void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
 {
-    // @TODO: fix time range, add reset. fix right click
     if (m_vecSeqBlocks.size() == 0) return;
     if (m_vecRfLib.size() == 0) return;
     if(dEndTime < 0) dEndTime = m_dTotalDuration_us;
 
-    double dMaxAmp(0.);
-    double dMinAmp(0.);
+    double dRfMaxAmp(0.);
+    double dRfMinAmp(0.);
     for(const auto& rfInfo : m_vecRfLib)
     {
         const auto& rf = rfInfo.event;
@@ -528,12 +527,12 @@ void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
             const float& amp = vecAmp[index];
             const float& phase = vecPhase[index];
             signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
-            dMaxAmp = std::max(dMaxAmp, signal);
-            dMinAmp = std::min(dMinAmp, signal);
+            dRfMaxAmp = std::max(dRfMaxAmp, signal);
+            dRfMinAmp = std::min(dRfMinAmp, signal);
         }
     }
-    double margin = (dMaxAmp - dMinAmp) * 0.1;
-    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dMinAmp - margin, dMaxAmp+ margin);
+    double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
+    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp+ margin);
     QCPRange newRange(dStartTime, dEndTime);
     m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
     m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
@@ -578,7 +577,8 @@ void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (event->mimeData()->hasUrls()) {
+    if (event->mimeData()->hasUrls())
+    {
         event->acceptProposedAction();
     }
 }
