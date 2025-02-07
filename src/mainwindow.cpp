@@ -15,10 +15,19 @@ MainWindow::MainWindow(QWidget *parent)
     , m_bIsDragging(false)
     , m_dTotalDuration_us(0.)
     , m_dDragStartRange(0.)
+    , m_listAxis({"RF", "GZ", "GY", "GX", "ADC"})
 {
     ui->setupUi(this);
     setAcceptDrops(true);
     Init();
+
+    m_mapAxisAction = {
+        {"RF", ui->actionRF},
+        {"GZ", ui->actionGZ},
+        {"GY", ui->actionGY},
+        {"GX", ui->actionGX},
+        {"ADC", ui->actionADC},
+        };
 
     m_listRecentPulseqFilePaths.resize(10);
 
@@ -63,30 +72,21 @@ void MainWindow::InitSequenceFigure()
 
     ui->customPlot->setAntialiasedElements(QCP::aeAll);
     ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
-    m_mapRect["RF"] = new QCPAxisRect(ui->customPlot);
-    m_mapRect["GZ"] = new QCPAxisRect(ui->customPlot);
-    m_mapRect["GY"] = new QCPAxisRect(ui->customPlot);
-    m_mapRect["GX"] = new QCPAxisRect(ui->customPlot);
-    m_mapRect["ADC"] = new QCPAxisRect(ui->customPlot);
 
-    ui->customPlot->plotLayout()->addElement(0, 0, m_mapRect["RF"]);
-    ui->customPlot->plotLayout()->addElement(1, 0, m_mapRect["GZ"]);
-    ui->customPlot->plotLayout()->addElement(2, 0, m_mapRect["GY"]);
-    ui->customPlot->plotLayout()->addElement(3, 0, m_mapRect["GX"]);
-    ui->customPlot->plotLayout()->addElement(4, 0, m_mapRect["ADC"]);
+    uint8_t index(0);
+    for (auto& axis : m_listAxis)
+    {
+        index = m_listAxis.indexOf(axis);
+        m_mapRect[axis] = new QCPAxisRect(ui->customPlot);
+        m_mapRect[axis]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+        ui->customPlot->plotLayout()->addElement(index, 0, m_mapRect[axis]);
+    }
 
     m_mapRect["RF"]->axis(QCPAxis::atLeft)->setLabel("RF (Hz)");
     m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setLabel("GZ (Hz/m)");
     m_mapRect["GY"]->axis(QCPAxis::atLeft)->setLabel("GY (Hz/m)");
     m_mapRect["GX"]->axis(QCPAxis::atLeft)->setLabel("GX (Hz/m)");
     m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setLabel("ADC");
-
-    // share the same time axis
-    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_mapRect["GZ"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_mapRect["GY"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_mapRect["GX"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-    m_mapRect["ADC"]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
 
     QMargins margins(70, 10, 10, 10);
     QFont labelFont;
@@ -98,15 +98,11 @@ void MainWindow::InitSequenceFigure()
         rect->setRangeZoom(Qt::Horizontal);
         rect->setupFullAxesBox(true);
 
-        // rect->axis(QCPAxis::atLeft)->setLabelPadding(30);
         rect->axis(QCPAxis::atLeft)->setLabelFont(labelFont);
     }
 
     // Hide all time axis but the last one
-    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setVisible(false);
-    m_mapRect["GZ"]->axis(QCPAxis::atBottom)->setVisible(false);
-    m_mapRect["GY"]->axis(QCPAxis::atBottom)->setVisible(false);
-    m_mapRect["GX"]->axis(QCPAxis::atBottom)->setVisible(false);
+    UpdateAxisVisibility();
 
     m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setRange(0, 1.3);
 }
@@ -163,6 +159,39 @@ void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
 
 void MainWindow::RestoreViewLayout()
 {
+    foreach (auto& rect, m_mapRect)
+    {
+        ui->customPlot->plotLayout()->take(rect);
+    }
+
+    uint16_t index(0);
+    for (auto& axis : m_listAxis)
+    {
+        if (m_mapAxisAction[axis]->isChecked())
+        {
+            ui->customPlot->plotLayout()->addElement(index, 0, m_mapRect[axis]);
+            index += 1;
+        }
+    }
+}
+
+void MainWindow::UpdateAxisVisibility()
+{
+    bool bAxisVisible(false);
+    for(auto it = m_listAxis.rbegin(); it != m_listAxis.rend(); ++it)
+    {
+        QString& axis = *it;
+        bool bIsRectVis(m_mapRect[axis]->visible());
+        if (bIsRectVis && !bAxisVisible)
+        {
+            bAxisVisible = true;
+            m_mapRect[axis]->axis(QCPAxis::atBottom)->setVisible(bAxisVisible);
+        }
+        else
+        {
+            m_mapRect[axis]->axis(QCPAxis::atBottom)->setVisible(false);
+        }
+    }
 }
 
 void MainWindow::SlotOpenPulseqFile()
@@ -206,29 +235,83 @@ void MainWindow::SlotEnableRFAxis()
     m_mapRect["RF"]->setVisible(isChecked);
     if (isChecked)
     {
-
+        RestoreViewLayout();
     }
     else
     {
-        ui->customPlot->plotLayout()->elementAt(0)->setVisible(false);
+        ui->customPlot->plotLayout()->take(m_mapRect["RF"]);
     }
+    UpdateAxisVisibility();
+    ui->customPlot->plotLayout()->simplify();
     ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableGZAxis()
 {
+    const bool& isChecked = ui->actionGZ->isChecked();
+    m_mapRect["GZ"]->setVisible(isChecked);
+    if (isChecked)
+    {
+        RestoreViewLayout();
+    }
+    else
+    {
+        ui->customPlot->plotLayout()->take(m_mapRect["GZ"]);
+    }
+    UpdateAxisVisibility();
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableGYAxis()
 {
+    const bool& isChecked = ui->actionGY->isChecked();
+    m_mapRect["GY"]->setVisible(isChecked);
+    if (isChecked)
+    {
+        RestoreViewLayout();
+    }
+    else
+    {
+        ui->customPlot->plotLayout()->take(m_mapRect["GY"]);
+    }
+    UpdateAxisVisibility();
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableGXAxis()
 {
+    const bool& isChecked = ui->actionGX->isChecked();
+    m_mapRect["GX"]->setVisible(isChecked);
+    if (isChecked)
+    {
+        RestoreViewLayout();
+    }
+    else
+    {
+        ui->customPlot->plotLayout()->take(m_mapRect["GX"]);
+    }
+    UpdateAxisVisibility();
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableADCAxis()
 {
+    const bool& isChecked = ui->actionADC->isChecked();
+    m_mapRect["ADC"]->setVisible(isChecked);
+    if (isChecked)
+    {
+        RestoreViewLayout();
+    }
+    else
+    {
+        ui->customPlot->plotLayout()->take(m_mapRect["ADC"]);
+    }
+    UpdateAxisVisibility();
+    ui->customPlot->plotLayout()->simplify();
+    ui->customPlot->replot();
 }
 
 void MainWindow::SlotEnableTriggerAxis()
@@ -478,7 +561,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
         double x2 = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
 
         // 如果选择范围太小，认为是点击事件，不进行缩放
-        if(qAbs(x2 - x1) > 5.0) 
+        if(qAbs(x2 - x1) > 20)
         {  
             if (x2 > x1)
             {

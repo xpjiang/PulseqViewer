@@ -49,6 +49,7 @@ private:
     void InitSequenceFigure();
     void UpdatePlotRange(const double& x1, const double& x2);
     void RestoreViewLayout();
+    void UpdateAxisVisibility();
 
     // Slots-File
     void SlotOpenPulseqFile();
@@ -117,8 +118,9 @@ private:
 
     // Plot
     QVector<QCPGraph*>                   m_vecRfGraphs;
-
     QMap<QString, QCPAxisRect*>          m_mapRect;
+    QMap<QString, QAction*>              m_mapAxisAction;
+    QList<QString>                       m_listAxis;
 
     // Interaction
     bool                                 m_bIsSelecting;
