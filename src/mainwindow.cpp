@@ -439,15 +439,17 @@ bool MainWindow::LoadPulseqEvents()
             const int& ushSamples = pSeqBlock->GetRFLength();
             const float& fDwell = pSeqBlock->GetRFDwellTime();
             const double& dDuration_us = ushSamples * fDwell;
-            RfInfo rfInfo(dCurrentStartTime_us+rfEvent.delay, dDuration_us, ushSamples, fDwell, &rfEvent);
+            const bool& bIsBlock = IsBlockRf(pSeqBlock->GetRFAmplitudePtr(), pSeqBlock->GetRFPhasePtr(), ushSamples);
+            RfInfo rfInfo(dCurrentStartTime_us+rfEvent.delay, dDuration_us, ushSamples, fDwell, bIsBlock, &rfEvent);
             m_vecRfLib.push_back(rfInfo);
 
             const int& magShapeID = rfEvent.magShape;
             if (!m_mapShapeLib.contains(magShapeID))
             {
-                std::vector<float> vecAmp(ushSamples+2, 0.f);
-                vecAmp[0] =0;
-                vecAmp[ushSamples+1] = std::numeric_limits<double>::quiet_NaN();
+                std::vector<float> vecAmp(ushSamples+1, 0.f);
+                // vecAmp[0] = std::numeric_limits<double>::quiet_NaN();
+                vecAmp[ushSamples] = std::numeric_limits<double>::quiet_NaN();
+
                 const float* fAmp = pSeqBlock->GetRFAmplitudePtr();
                 for (int index = 0; index < ushSamples; index++)
                 {
@@ -459,9 +461,9 @@ bool MainWindow::LoadPulseqEvents()
             const int& phaseShapeID = rfEvent.phaseShape;
             if (!m_mapShapeLib.contains(phaseShapeID))
             {
-                std::vector<float> vecPhase(ushSamples+2, 0.f);
-                vecPhase[0] = std::numeric_limits<double>::quiet_NaN();
-                vecPhase[ushSamples+1] = std::numeric_limits<double>::quiet_NaN();
+                std::vector<float> vecPhase(ushSamples+1, 0.f);
+                // vecPhase[0] = std::numeric_limits<double>::quiet_NaN();
+                vecPhase[ushSamples] = std::numeric_limits<double>::quiet_NaN();
 
                 const float* fPhase = pSeqBlock->GetRFPhasePtr();
                 for (int index = 0; index < ushSamples; index++)
@@ -479,6 +481,22 @@ bool MainWindow::LoadPulseqEvents()
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
     DrawWaveform(0, -1);
 
+    return true;
+}
+
+bool MainWindow::IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples)
+{
+    for (int i = 0; i < iSamples - 1; ++i)
+    {
+        if (!std::fabs(fAmp[i+1] - fAmp[i]) < 1e-6)
+        {
+            return false;
+        }
+        if (!std::fabs(fPhase[i+1] - fPhase[i]) < 1e-6)
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -551,7 +569,6 @@ void MainWindow::onMouseMove(QMouseEvent *event)
 void MainWindow::onMouseRelease(QMouseEvent *event)
 {
     if (m_vecSeqBlocks.size() == 0) return;
-    if (m_vecRfLib.size() == 0) return;
 
     ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
     if(event->button() == Qt::LeftButton && m_bIsSelecting)
@@ -606,7 +623,6 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
         const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
         const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
 
-        // 添加波形数据点
         double signal(0.);
         for(uint32_t index = 0; index < vecAmp.size(); index++)
         {
@@ -639,21 +655,50 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
         const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
         const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
 
-        QVector<double> timePoints(vecAmp.size(), 0.);
-        QVector<double> amplitudes(vecAmp.size(), 0.);
-
-        // 添加波形数据点
-        double signal(0.);
-        for(uint32_t index = 0; index < vecAmp.size(); index++)
+        if (rfInfo.isBlock)
         {
-            const float& amp = vecAmp[index];
-            const float& phase = vecPhase[index];
-            signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
-            timePoints[index] = sampleTime;
-            amplitudes[index] = signal;
-            sampleTime += rfInfo.dwell;
+            QVector<double> timePoints(vecAmp.size() + 2, 0.);
+            QVector<double> amplitudes(vecAmp.size() + 2, 0.);
+
+            timePoints[0] = sampleTime;
+            amplitudes[0] = 0;
+
+            // 添加波形数据点
+            double signal(0.);
+            for(uint32_t index = 0; index < vecAmp.size(); index++)
+            {
+                const float& amp = vecAmp[index];
+                const float& phase = vecPhase[index];
+                signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+                timePoints[index] = sampleTime;
+                amplitudes[index] = signal;
+                sampleTime += rfInfo.dwell;
+            }
+
+            timePoints[timePoints.size()-1] = timePoints[timePoints.size()-2];
+            amplitudes[amplitudes.size()-1] = 0;
+
+            rfGraph->setData(timePoints, amplitudes);
         }
-        rfGraph->setData(timePoints, amplitudes);
+        else
+        {
+            QVector<double> timePoints(vecAmp.size(), 0.);
+            QVector<double> amplitudes(vecAmp.size(), 0.);
+
+            // 添加波形数据点
+            double signal(0.);
+            for(uint32_t index = 0; index < vecAmp.size(); index++)
+            {
+                const float& amp = vecAmp[index];
+                const float& phase = vecPhase[index];
+                signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+                timePoints[index] = sampleTime;
+                amplitudes[index] = signal;
+                sampleTime += rfInfo.dwell;
+            }
+            rfGraph->setData(timePoints, amplitudes);
+        }
+
         rfGraph->setPen(QPen(Qt::blue));
         rfGraph->setSelectable(QCP::stWhole);
     }
