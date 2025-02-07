@@ -8,8 +8,8 @@
 
 #include <ExternalSequence.h>
 
-
-#define SAFE_DELETE(p) { if(p) { delete p; p = nullptr; } }
+#define BASIC_WIN_TITLE              ("PulseqViewer")
+#define SAFE_DELETE(p)               { if(p) { delete p; p = nullptr; } }
 
 namespace Ui {
 class MainWindow;

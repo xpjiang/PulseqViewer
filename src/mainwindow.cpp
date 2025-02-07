@@ -19,6 +19,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setAcceptDrops(true);
+    this->setWindowTitle(BASIC_WIN_TITLE);
     Init();
 
     m_mapAxisAction = {
@@ -354,6 +355,7 @@ void MainWindow::ClearPulseqCache()
         std::cout << m_sPulseqFilePath.toStdString() << " Closed\n";
     }
     this->setWindowFilePath("");
+    this->setWindowTitle(QString(BASIC_WIN_TITLE));
 }
 
 bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
@@ -413,6 +415,7 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 
     m_pProgressBar->setValue(100);
     this->setEnabled(true);
+    this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath);
     return true;
 }
 
