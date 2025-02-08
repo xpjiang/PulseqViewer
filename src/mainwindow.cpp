@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_dTotalDuration_us(0.)
     , m_dDragStartRange(0.)
     , m_listAxis({"RF", "GZ", "GY", "GX", "ADC"})
+    , m_pSelectedGraph(nullptr)
 {
     ui->setupUi(this);
     setAcceptDrops(true);
@@ -127,10 +128,14 @@ void MainWindow::InitSlots()
 
     connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::SlotResetView);
 
+    // Analysis
+    connect(ui->actionExportData, &QAction::triggered, this, &MainWindow::SlotExportData);
+
     // Interaction
     connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
     connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
     connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
+    connect(ui->customPlot, &QCustomPlot::plottableClick, this, &MainWindow::onPlottableClick);
 
 
     foreach (auto& rect1, m_mapRect)
@@ -331,7 +336,7 @@ void MainWindow::ClearPulseqCache()
     m_pVersionLabel->setText("");
     m_pVersionLabel->setVisible(false);
     m_pProgressBar->hide();
-
+    m_pSelectedGraph = nullptr;
     if (NULL != ui->customPlot)
     {
         ui->customPlot->clearGraphs();
@@ -447,30 +452,18 @@ bool MainWindow::LoadPulseqEvents()
             const int& magShapeID = rfEvent.magShape;
             if (!m_mapShapeLib.contains(magShapeID))
             {
-                std::vector<float> vecAmp(ushSamples+1, 0.f);
-                // vecAmp[0] = std::numeric_limits<double>::quiet_NaN();
-                vecAmp[ushSamples] = std::numeric_limits<double>::quiet_NaN();
-
+                std::vector<float> vecAmp(ushSamples, 0.f);
                 const float* fAmp = pSeqBlock->GetRFAmplitudePtr();
-                for (int index = 0; index < ushSamples; index++)
-                {
-                    vecAmp[index] = fAmp[index];
-                }
+                std::memcpy(vecAmp.data(), fAmp, ushSamples * sizeof(float));
                 m_mapShapeLib.insert(magShapeID, vecAmp);
             }
 
             const int& phaseShapeID = rfEvent.phaseShape;
             if (!m_mapShapeLib.contains(phaseShapeID))
             {
-                std::vector<float> vecPhase(ushSamples+1, 0.f);
-                // vecPhase[0] = std::numeric_limits<double>::quiet_NaN();
-                vecPhase[ushSamples] = std::numeric_limits<double>::quiet_NaN();
-
+                std::vector<float> vecPhase(ushSamples, 0.f);
                 const float* fPhase = pSeqBlock->GetRFPhasePtr();
-                for (int index = 0; index < ushSamples; index++)
-                {
-                    vecPhase[index] = fPhase[index];
-                }
+                std::memcpy(vecPhase.data(), fPhase, ushSamples * sizeof(float));
                 m_mapShapeLib.insert(phaseShapeID, vecPhase);
             }
 
@@ -489,11 +482,11 @@ bool MainWindow::IsBlockRf(const float* fAmp, const float* fPhase, const int& iS
 {
     for (int i = 0; i < iSamples - 1; ++i)
     {
-        if (!std::fabs(fAmp[i+1] - fAmp[i]) < 1e-6)
+        if (!(std::fabs(fAmp[i+1] - fAmp[i]) < 1e-6))
         {
             return false;
         }
-        if (!std::fabs(fPhase[i+1] - fPhase[i]) < 1e-6)
+        if (!(std::fabs(fPhase[i+1] - fPhase[i]) < 1e-6))
         {
             return false;
         }
@@ -582,7 +575,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
         double x2 = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
 
         // 如果选择范围太小，认为是点击事件，不进行缩放
-        if(qAbs(x2 - x1) > 20)
+        if(qAbs(x2 - x1) > 5)
         {  
             if (x2 > x1)
             {
@@ -615,6 +608,12 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
     if (m_vecSeqBlocks.size() == 0) return;
     if (m_vecRfLib.size() == 0) return;
     if(dEndTime < 0) dEndTime = m_dTotalDuration_us;
+
+    QPen pen;
+    pen.setColor(Qt::blue);
+    // pen.setWidth(2);
+    pen.setJoinStyle(Qt::MiterJoin);
+    pen.setCapStyle(Qt::FlatCap);
 
     double dRfMaxAmp(0.);
     double dRfMinAmp(0.);
@@ -649,6 +648,7 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
 
         QCPGraph* rfGraph = ui->customPlot->addGraph(m_mapRect["RF"]->axis(QCPAxis::atBottom),
                                                      m_mapRect["RF"]->axis(QCPAxis::atLeft));
+        rfGraph->setLineStyle(QCPGraph::lsStepLeft);
         m_vecRfGraphs.append(rfGraph);
 
         const auto& rf = rfInfo.event;
@@ -656,55 +656,78 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
         const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
         const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
 
-        if (rfInfo.isBlock)
+        const uint32_t& ushSamples = vecAmp.size();
+        QVector<double> timePoints(ushSamples+3, 0.);
+        QVector<double> amplitudes(ushSamples+3, 0.);
+
+        timePoints[0] = sampleTime;
+        amplitudes[0] = 0;
+        double signal(0.);
+        for(uint32_t index = 0; index < ushSamples; index++)
         {
-            QVector<double> timePoints(vecAmp.size() + 2, 0.);
-            QVector<double> amplitudes(vecAmp.size() + 2, 0.);
-
-            timePoints[0] = sampleTime;
-            amplitudes[0] = 0;
-
-            // 添加波形数据点
-            double signal(0.);
-            for(uint32_t index = 0; index < vecAmp.size(); index++)
-            {
-                const float& amp = vecAmp[index];
-                const float& phase = vecPhase[index];
-                signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
-                timePoints[index] = sampleTime;
-                amplitudes[index] = signal;
-                sampleTime += rfInfo.dwell;
-            }
-
-            timePoints[timePoints.size()-1] = timePoints[timePoints.size()-2];
-            amplitudes[amplitudes.size()-1] = 0;
-
-            rfGraph->setData(timePoints, amplitudes);
-        }
-        else
-        {
-            QVector<double> timePoints(vecAmp.size(), 0.);
-            QVector<double> amplitudes(vecAmp.size(), 0.);
-
-            // 添加波形数据点
-            double signal(0.);
-            for(uint32_t index = 0; index < vecAmp.size(); index++)
-            {
-                const float& amp = vecAmp[index];
-                const float& phase = vecPhase[index];
-                signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
-                timePoints[index] = sampleTime;
-                amplitudes[index] = signal;
-                sampleTime += rfInfo.dwell;
-            }
-            rfGraph->setData(timePoints, amplitudes);
+            const float& amp = vecAmp[index];
+            const float& phase = vecPhase[index];
+            signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+            timePoints[index+1] = sampleTime;
+            amplitudes[index+1] = signal;
+            sampleTime += rfInfo.dwell;
         }
 
-        rfGraph->setPen(QPen(Qt::blue));
+        timePoints[ushSamples+1] = sampleTime;
+        amplitudes[ushSamples+1] = signal;
+
+        timePoints[ushSamples+2] = sampleTime;
+        amplitudes[ushSamples+2] = 0;
+        rfGraph->setData(timePoints, amplitudes);
+
+        rfGraph->setPen(pen);
         rfGraph->setSelectable(QCP::stWhole);
     }
 
     UpdatePlotRange(dStartTime, dEndTime);
+}
+
+void MainWindow::SlotExportData()
+{
+    if(!m_pSelectedGraph)
+    {
+        QMessageBox::information(this, "Hint", "Please select a graph!");
+        return;
+    }
+
+    // 找到选中的graph在vector中的索引
+    int graphIndex = m_vecRfGraphs.indexOf(m_pSelectedGraph);
+    if(graphIndex == -1) return;
+    // QString fileName = QFileDialog::getSaveFileName(this,
+    //                                                 tr("保存波形数据"), "",
+    //                                                 tr("文本文件 (*.txt);;所有文件 (*)"));
+
+    // if(fileName.isEmpty()) return;
+
+    QString fileName = "D:\\data.txt";
+
+    QFile file(fileName);
+    if(file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QTextStream stream(&file);
+
+        QSharedPointer<QCPGraphDataContainer> data = m_pSelectedGraph->data();
+        double time(0.);
+        double point(0.);
+        for(int i = 0; i < data->size(); ++i)
+        {
+            time = data->at(i)->key;
+            point = data->at(i)->value;
+            stream << time << "\t" << point << "\n";
+        }
+
+        file.close();
+        QMessageBox::information(this, "成功", "数据已成功导出");
+    }
+    else
+    {
+        QMessageBox::warning(this, "错误", "无法创建文件");
+    }
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -755,6 +778,15 @@ void MainWindow::onAxisRangeChanged(const QCPRange& newRange)
         }
         axis->setRange(boundedRange);
     }
+}
+
+void MainWindow::onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event)
+{
+    QCPGraph* graph = qobject_cast<QCPGraph*>(plottable);
+    if(!graph) return;
+
+    // 只需更新选中的 graph
+    m_pSelectedGraph = graph;
 }
 
 

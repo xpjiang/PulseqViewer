@@ -70,7 +70,10 @@ private:
     void SlotEnableADCAxis();
     void SlotEnableTriggerAxis();
 
-    // Slots-View
+    // Slot-Analysis
+    void SlotExportData();
+
+    // Slot-View
     void SlotResetView();
 
     // Slots-Interaction
@@ -81,6 +84,7 @@ private:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void onAxisRangeChanged(const QCPRange &newRange);
+    void onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event);
 
     // Pulseq
     void ClearPulseqCache();
@@ -137,6 +141,7 @@ private:
     QCPItemRect*                         m_pSelectionRect;
     QPoint                               m_objDragStartPos;       // 记录拖拽起始位置
     double                               m_dDragStartRange;
+    QCPGraph*                            m_pSelectedGraph;
 };
 
 #endif // MAINWINDOW_H

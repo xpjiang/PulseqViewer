@@ -36,7 +36,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>20</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -82,6 +82,7 @@
     <property name="title">
      <string>Analysis</string>
     </property>
+    <addaction name="actionExportData"/>
    </widget>
    <widget class="QMenu" name="menuAbout">
     <property name="title">
@@ -124,6 +125,7 @@
    <addaction name="actionTrigger"/>
    <addaction name="separator"/>
    <addaction name="actionResetView"/>
+   <addaction name="actionExportData"/>
   </widget>
   <action name="actionOpen">
    <property name="icon">
@@ -269,6 +271,11 @@
    </property>
    <property name="text">
     <string>Axis Toolbar</string>
+   </property>
+  </action>
+  <action name="actionExportData">
+   <property name="text">
+    <string>Export Data</string>
    </property>
   </action>
  </widget>
