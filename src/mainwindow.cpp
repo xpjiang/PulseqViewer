@@ -13,7 +13,6 @@ MainWindow::MainWindow(QWidget *parent)
     , m_lRfNum(0)
     , m_bIsSelecting(false)
     , m_bIsDragging(false)
-    , m_dTotalDuration_us(0.)
     , m_dDragStartRange(0.)
     , m_listAxis({"RF", "GZ", "GY", "GX", "ADC"})
     , m_pSelectedGraph(nullptr)
@@ -328,7 +327,7 @@ void MainWindow::SlotEnableTriggerAxis()
 void MainWindow::SlotResetView()
 {
     if (m_sPulseqFilePathCache.isEmpty()) return;
-    UpdatePlotRange(0, m_dTotalDuration_us);
+    UpdatePlotRange(0, m_objSeqInfo.totalDuration_us);
 }
 
 void MainWindow::ClearPulseqCache()
@@ -344,7 +343,7 @@ void MainWindow::ClearPulseqCache()
         ui->customPlot->replot();
     }
 
-    m_dTotalDuration_us = 0.;
+    m_objSeqInfo.totalDuration_us = 0.;
     m_lRfNum = 0;
 
     m_mapShapeLib.clear();
@@ -368,112 +367,63 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 {
     this->setEnabled(false);
     ClearPulseqCache();
-    if (!m_spPulseqSeq->load(sPulseqFilePath.toStdString()))
-    {
-        this->setEnabled(false);
-        std::stringstream sLog;
-        sLog << "Load " << sPulseqFilePath.toStdString() << " failed!";
-        std::cout << sLog.str() << "\n";
-        QMessageBox::critical(this, "File Error", sLog.str().c_str());
-        this->setEnabled(true);
-        return false;
-    }
-    this->setWindowFilePath(sPulseqFilePath);
-
-    const int& shVersion = m_spPulseqSeq->GetVersion();
-    m_pVersionLabel->setVisible(true);
-    const int& shVersionMajor = shVersion / 1000000L;
-    const int& shVersionMinor = (shVersion / 1000L) % 1000L;
-    const int& shVersionRevision = shVersion % 1000L;
-    QString sVersion = QString::number(shVersionMajor) + "." + QString::number(shVersionMinor) + "." + QString::number(shVersionRevision);
-    m_pVersionLabel->setText("Pulseq Version: v" + sVersion);
-
-    const int64_t& lSeqBlockNum = m_spPulseqSeq->GetNumberOfBlocks();
-    std::cout << lSeqBlockNum << " blocks detected!\n";
-    m_vecSeqBlocks.resize(lSeqBlockNum);
     m_pProgressBar->show();
-    uint32_t progress(0);
-    for (uint16_t ushBlockIndex=0; ushBlockIndex < lSeqBlockNum; ushBlockIndex++)
-    {
-        m_vecSeqBlocks[ushBlockIndex] = m_spPulseqSeq->GetBlock(ushBlockIndex);
-        if (!m_spPulseqSeq->decodeBlock(m_vecSeqBlocks[ushBlockIndex]))
-        {
-            std::stringstream sLog;
-            sLog << "Decode SeqBlock failed, block index: " << ushBlockIndex;
-            QMessageBox::critical(this, "File Error", sLog.str().c_str());
-            ClearPulseqCache();
-            return false;
-        }
-        if (m_vecSeqBlocks[ushBlockIndex]->isRF()) { m_lRfNum += 1; }
+    m_pProgressBar->setValue(0);
 
-        progress = ushBlockIndex * 100 / lSeqBlockNum;
-        m_pProgressBar->setValue(progress);
-    }
+    QThread* thread = new QThread;
+    PulseqLoader* loader = new PulseqLoader;
+    loader->moveToThread(thread);
+    loader->SetPulseqFile(sPulseqFilePath);
+    loader->SetSequence(m_spPulseqSeq);
 
-    m_vecRfLib.reserve(m_lRfNum);
+    connect(thread, &QThread::started, loader, &PulseqLoader::process);
+    connect(loader, &PulseqLoader::finished, thread, &QThread::quit);
+    connect(loader, &PulseqLoader::finished, loader, &PulseqLoader::deleteLater);
+    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
-    if (!LoadPulseqEvents())
-    {
-        std::cout << "LoadPulseqEvents failed!\n";
-        QMessageBox::critical(this, "Pulseq Events Error", "LoadPulseqEvents failed!");
-        return false;
-    }
+    connect(loader, &PulseqLoader::errorOccurred, this, [this](const QString& error) {
+        QMessageBox::critical(this, "File Error", error);
+        ClearPulseqCache();
+        this->setEnabled(true);
+    });
 
-    m_pProgressBar->setValue(100);
-    this->setEnabled(true);
-    this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath);
+    connect(loader, &PulseqLoader::progressUpdated, m_pProgressBar, &QProgressBar::setValue);
+
+    connect(loader, &PulseqLoader::versionLoaded, this, [this](int version) {
+        m_pVersionLabel->setVisible(true);
+        const int shVersionMajor = version / 1000000L;
+        const int shVersionMinor = (version / 1000L) % 1000L;
+        const int shVersionRevision = version % 1000L;
+        QString sVersion = QString::number(shVersionMajor) + "." +
+                           QString::number(shVersionMinor) + "." +
+                           QString::number(shVersionRevision);
+        m_pVersionLabel->setText("Pulseq Version: v" + sVersion);
+    });
+
+    connect(loader, &PulseqLoader::loadingCompleted,
+            this, [this, sPulseqFilePath](const SeqInfo& seqInfo,
+                                          const QVector<SeqBlock*>& blocks,
+                                          const QMap<int, QVector<float>>& shapeLib,
+                                          const QVector<RfInfo>& rfLib
+                                          ) {
+                m_objSeqInfo = seqInfo;
+                m_vecSeqBlocks = blocks;
+                m_mapShapeLib = shapeLib;
+                m_vecRfLib = rfLib;
+                m_pProgressBar->setValue(100);
+                this->setEnabled(true);
+                this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath);
+                this->setWindowFilePath(sPulseqFilePath);
+                DrawWaveform();
+            });
+
+    thread->start();
     return true;
 }
 
 bool MainWindow::ClosePulseqFile()
 {
     ClearPulseqCache();
-
-    return true;
-}
-
-bool MainWindow::LoadPulseqEvents()
-{
-    if (m_vecSeqBlocks.size() == 0) return true;
-    m_dTotalDuration_us = 0.;
-    double dCurrentStartTime_us(0.);
-    for (const auto& pSeqBlock : m_vecSeqBlocks)
-    {
-        if (pSeqBlock->isRF())
-        {
-            const RFEvent& rfEvent = pSeqBlock->GetRFEvent();
-            const int& ushSamples = pSeqBlock->GetRFLength();
-            const float& fDwell = pSeqBlock->GetRFDwellTime();
-            const double& dDuration_us = ushSamples * fDwell;
-            RfInfo rfInfo(dCurrentStartTime_us+rfEvent.delay, dDuration_us, ushSamples, fDwell, &rfEvent);
-            m_vecRfLib.push_back(rfInfo);
-
-            const int& magShapeID = rfEvent.magShape;
-            if (!m_mapShapeLib.contains(magShapeID))
-            {
-                std::vector<float> vecAmp(ushSamples, 0.f);
-                const float* fAmp = pSeqBlock->GetRFAmplitudePtr();
-                std::memcpy(vecAmp.data(), fAmp, ushSamples * sizeof(float));
-                m_mapShapeLib.insert(magShapeID, vecAmp);
-            }
-
-            const int& phaseShapeID = rfEvent.phaseShape;
-            if (!m_mapShapeLib.contains(phaseShapeID))
-            {
-                std::vector<float> vecPhase(ushSamples, 0.f);
-                const float* fPhase = pSeqBlock->GetRFPhasePtr();
-                std::memcpy(vecPhase.data(), fPhase, ushSamples * sizeof(float));
-                m_mapShapeLib.insert(phaseShapeID, vecPhase);
-            }
-
-        }
-        dCurrentStartTime_us += pSeqBlock->GetDuration();
-        m_dTotalDuration_us += pSeqBlock->GetDuration();
-    }
-
-    std::cout << m_vecRfLib.size() << " RF events detetced!\n";
-    DrawWaveform();
-
     return true;
 }
 
@@ -538,7 +488,7 @@ void MainWindow::onMouseMove(QMouseEvent *event)
         double x2New = x1New + xSpan;
 
         x1New = x1New < 0 ? 0 : x1New;
-        x2New = x2New > m_dTotalDuration_us ? m_dTotalDuration_us : x2New;
+        x2New = x2New > m_objSeqInfo.totalDuration_us ? m_objSeqInfo.totalDuration_us : x2New;
         UpdatePlotRange(x1New, x2New);
     }
 }
@@ -574,7 +524,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
                 double x2New = center + newSpan / 2;
 
                 x1New = x1New < 0 ? 0 : x1New;
-                x2New = x2New > m_dTotalDuration_us ? m_dTotalDuration_us : x2New;
+                x2New = x2New > m_objSeqInfo.totalDuration_us ? m_objSeqInfo.totalDuration_us : x2New;
                 UpdatePlotRange(x1New, x2New);
             }
         }
@@ -601,28 +551,6 @@ void MainWindow::DrawWaveform()
     double dRfMinAmp(0.);
     for(const auto& rfInfo : m_vecRfLib)
     {
-        const auto& rf = rfInfo.event;
-        const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
-        const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
-
-        double signal(0.);
-        for(uint32_t index = 0; index < vecAmp.size(); index++)
-        {
-            const float& amp = vecAmp[index];
-            const float& phase = vecPhase[index];
-            signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
-            dRfMaxAmp = std::max(dRfMaxAmp, signal);
-            dRfMinAmp = std::min(dRfMinAmp, signal);
-        }
-    }
-    double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
-    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp + margin);
-    QCPRange newRange(0, m_dTotalDuration_us);
-    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
-    m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
-
-    for(const auto& rfInfo : m_vecRfLib)
-    {
         QCPGraph* rfGraph = ui->customPlot->addGraph(m_mapRect["RF"]->axis(QCPAxis::atBottom),
                                                      m_mapRect["RF"]->axis(QCPAxis::atLeft));
         rfGraph->setLineStyle(QCPGraph::lsStepLeft);
@@ -631,8 +559,8 @@ void MainWindow::DrawWaveform()
 
         const auto& rf = rfInfo.event;
         double sampleTime = rfInfo.startAbsTime_us;
-        const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
-        const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
+        const QVector<float>& vecAmp = m_mapShapeLib[rf->magShape];
+        const QVector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
 
         const uint32_t& ushSamples = vecAmp.size();
         QVector<double> timePoints(ushSamples+2, 0.);
@@ -649,6 +577,8 @@ void MainWindow::DrawWaveform()
             timePoints[index+1] = sampleTime;
             amplitudes[index+1] = signal;
             sampleTime += rfInfo.dwell;
+            dRfMaxAmp = std::max(dRfMaxAmp, signal);
+            dRfMinAmp = std::min(dRfMinAmp, signal);
         }
 
         timePoints[ushSamples+1] = sampleTime;
@@ -659,7 +589,9 @@ void MainWindow::DrawWaveform()
         rfGraph->setSelectable(QCP::stWhole);
     }
 
-    UpdatePlotRange(0, m_dTotalDuration_us);
+    double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
+    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp + margin);
+    UpdatePlotRange(0, m_objSeqInfo.totalDuration_us);
 }
 
 void MainWindow::SlotExportData()
@@ -739,17 +671,17 @@ void MainWindow::onAxisRangeChanged(const QCPRange& newRange)
     if (!axis) return;
 
     // check if exceeding range
-    if (newRange.lower < 0 || newRange.upper > m_dTotalDuration_us) {
+    if (newRange.lower < 0 || newRange.upper > m_objSeqInfo.totalDuration_us) {
         QCPRange boundedRange = newRange;
         if (boundedRange.lower < 0)
         {
             boundedRange.lower = 0;
-            boundedRange.upper = qMin(0 + newRange.size(), m_dTotalDuration_us);
+            boundedRange.upper = qMin(0 + newRange.size(), m_objSeqInfo.totalDuration_us);
         }
-        if (boundedRange.upper > m_dTotalDuration_us)
+        if (boundedRange.upper > m_objSeqInfo.totalDuration_us)
         {
-            boundedRange.upper = m_dTotalDuration_us;
-            boundedRange.lower = qMax(m_dTotalDuration_us - newRange.size(), 0.);
+            boundedRange.upper = m_objSeqInfo.totalDuration_us;
+            boundedRange.lower = qMax(m_objSeqInfo.totalDuration_us - newRange.size(), 0.);
         }
         axis->setRange(boundedRange);
     }

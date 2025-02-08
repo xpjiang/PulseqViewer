@@ -7,6 +7,7 @@
 #include <qcustomplot.h>
 
 #include <ExternalSequence.h>
+#include "pulseq_loader.h"
 
 #define BASIC_WIN_TITLE              ("PulseqViewer")
 #define SAFE_DELETE(p)               { if(p) { delete p; p = nullptr; } }
@@ -14,28 +15,6 @@
 namespace Ui {
 class MainWindow;
 }
-
-struct RfInfo
-{
-    double startAbsTime_us;
-    double duration_us;
-    uint16_t samples;
-    float dwell;
-    const RFEvent* event;
-
-    RfInfo(
-        const double& dStartAbsTime_us,
-        const double& dDuration_us,
-        const uint16_t ushSamples,
-        const float& fDwell,
-        const RFEvent* pRfEvent)
-        : startAbsTime_us(dStartAbsTime_us)
-        , duration_us(dDuration_us)
-        , samples(ushSamples)
-        , dwell(fDwell)
-        , event(pRfEvent)
-    {}
-};
 
 class MainWindow : public QMainWindow
 {
@@ -87,7 +66,6 @@ private:
     void ClearPulseqCache();
     bool LoadPulseqFile(const QString& sPulseqFilePath);
     bool ClosePulseqFile();
-    bool LoadPulseqEvents();
 
 private:
     Ui::MainWindow                       *ui;
@@ -100,10 +78,10 @@ private:
     QString                              m_sPulseqFilePathCache;
     QStringList                          m_listRecentPulseqFilePaths;
     std::shared_ptr<ExternalSequence>    m_spPulseqSeq;
-    std::vector<SeqBlock*>               m_vecSeqBlocks;
-    double                               m_dTotalDuration_us;
+    QVector<SeqBlock*>                   m_vecSeqBlocks;
+    SeqInfo                              m_objSeqInfo;
 
-    QMap<int, std::vector<float>>        m_mapShapeLib;
+    QMap<int, QVector<float>>            m_mapShapeLib;
     // RF
     uint64_t                             m_lRfNum;
     QVector<RfInfo>                      m_vecRfLib;
