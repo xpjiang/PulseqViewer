@@ -48,8 +48,9 @@ public slots:
     void process();
 
 signals:
+    void processingStarted();
     void errorOccurred(const QString& error);
-    void progressUpdated(int progress);
+    void progressUpdated(uint64_t progress);
     void versionLoaded(int version);
     void loadingCompleted(const SeqInfo& seqInfo,
                           const QVector<SeqBlock*>& blocks,

@@ -9,6 +9,8 @@ PulseqLoader::PulseqLoader(QObject *parent)
 
 void PulseqLoader::process()
 {
+    emit processingStarted();
+
     if (!m_spPulseqSeq->load(m_sFilePath.toStdString())) {
         emit errorOccurred("Load " + m_sFilePath + " failed!");
         emit finished();
@@ -18,10 +20,11 @@ void PulseqLoader::process()
     const int shVersion = m_spPulseqSeq->GetVersion();
     emit versionLoaded(shVersion);
 
-    const int64_t lSeqBlockNum = m_spPulseqSeq->GetNumberOfBlocks();
+    const int lSeqBlockNum = m_spPulseqSeq->GetNumberOfBlocks();
     m_vecSeqBlock.resize(lSeqBlockNum);
 
-    for (uint16_t ushBlockIndex = 0; ushBlockIndex < lSeqBlockNum; ushBlockIndex++) {
+    uint64_t progress(0.);
+    for (int ushBlockIndex = 0; ushBlockIndex < lSeqBlockNum; ushBlockIndex++) {
         m_vecSeqBlock[ushBlockIndex] = m_spPulseqSeq->GetBlock(ushBlockIndex);
         if (!m_spPulseqSeq->decodeBlock(m_vecSeqBlock[ushBlockIndex])) {
             emit errorOccurred(QString("Decode SeqBlock failed, block index: %1").arg(ushBlockIndex));
@@ -31,7 +34,8 @@ void PulseqLoader::process()
         if (m_vecSeqBlock[ushBlockIndex]->isRF()) {
             m_lRfNum += 1;
         }
-        emit progressUpdated(ushBlockIndex * 100 / lSeqBlockNum);
+        progress = ushBlockIndex * 100 / lSeqBlockNum;
+        emit progressUpdated(progress);
     }
 
     m_vecRfLib.reserve(m_lRfNum);

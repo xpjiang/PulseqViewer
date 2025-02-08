@@ -71,6 +71,9 @@ void MainWindow::InitSequenceFigure()
 {
     ui->customPlot->plotLayout()->clear();
 
+    // ui->customPlot->setNotAntialiasedElements(QCP::aeAll);  // 关闭抗锯齿
+    ui->customPlot->setPlottingHints(QCP::phFastPolylines);
+    // ui->customPlot->setOpenGl(true);
     ui->customPlot->setAntialiasedElements(QCP::aeAll);
     ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
 
@@ -160,7 +163,7 @@ void MainWindow::InitSlots()
 void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
 {
     ui->customPlot->xAxis->setRange(x1, x2);
-    ui->customPlot->replot();
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void MainWindow::RestoreViewLayout()
@@ -249,7 +252,7 @@ void MainWindow::SlotEnableRFAxis()
     }
     UpdateAxisVisibility();
     ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void MainWindow::SlotEnableGZAxis()
@@ -266,7 +269,7 @@ void MainWindow::SlotEnableGZAxis()
     }
     UpdateAxisVisibility();
     ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void MainWindow::SlotEnableGYAxis()
@@ -283,7 +286,7 @@ void MainWindow::SlotEnableGYAxis()
     }
     UpdateAxisVisibility();
     ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void MainWindow::SlotEnableGXAxis()
@@ -300,7 +303,7 @@ void MainWindow::SlotEnableGXAxis()
     }
     UpdateAxisVisibility();
     ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void MainWindow::SlotEnableADCAxis()
@@ -317,7 +320,7 @@ void MainWindow::SlotEnableADCAxis()
     }
     UpdateAxisVisibility();
     ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot();
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void MainWindow::SlotEnableTriggerAxis()
@@ -352,7 +355,7 @@ void MainWindow::ClearPulseqCache()
     {
         m_spPulseqSeq->reset();
         m_spPulseqSeq.reset(new ExternalSequence);
-        for (uint16_t ushBlockIndex=0; ushBlockIndex < m_vecSeqBlocks.size(); ushBlockIndex++)
+        for (uint64_t ushBlockIndex=0; ushBlockIndex < m_vecSeqBlocks.size(); ushBlockIndex++)
         {
             SAFE_DELETE(m_vecSeqBlocks[ushBlockIndex]);
         }
@@ -367,7 +370,8 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 {
     this->setEnabled(false);
     ClearPulseqCache();
-    m_pProgressBar->show();
+    m_pVersionLabel->setVisible(true);
+    m_pVersionLabel->setText("Loading...");
     m_pProgressBar->setValue(0);
 
     QThread* thread = new QThread;
@@ -376,6 +380,10 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
     loader->SetPulseqFile(sPulseqFilePath);
     loader->SetSequence(m_spPulseqSeq);
 
+    connect(loader, &PulseqLoader::processingStarted,
+            this, [this]() {
+                m_pProgressBar->show();
+            });
     connect(thread, &QThread::started, loader, &PulseqLoader::process);
     connect(loader, &PulseqLoader::finished, thread, &QThread::quit);
     connect(loader, &PulseqLoader::finished, loader, &PulseqLoader::deleteLater);
@@ -390,7 +398,6 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
     connect(loader, &PulseqLoader::progressUpdated, m_pProgressBar, &QProgressBar::setValue);
 
     connect(loader, &PulseqLoader::versionLoaded, this, [this](int version) {
-        m_pVersionLabel->setVisible(true);
         const int shVersionMajor = version / 1000000L;
         const int shVersionMinor = (version / 1000L) % 1000L;
         const int shVersionRevision = version % 1000L;
@@ -443,7 +450,7 @@ void MainWindow::onMousePress(QMouseEvent *event)
         m_pSelectionRect->bottomRight->setCoords(x, y);
         m_pSelectionRect->setVisible(true);
 
-        ui->customPlot->replot();
+        ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
     }
     else if (event->button() == Qt::RightButton)
     {
@@ -474,7 +481,7 @@ void MainWindow::onMouseMove(QMouseEvent *event)
         m_pSelectionRect->topLeft->setCoords(qMin(x1, x2), qMax(y1, y2));
         m_pSelectionRect->bottomRight->setCoords(qMax(x1, x2), qMin(y1, y2));
 
-        ui->customPlot->replot();
+        ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
     }
     else if (m_bIsDragging)
     {
