@@ -473,7 +473,7 @@ bool MainWindow::LoadPulseqEvents()
     }
 
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
-    DrawWaveform(0, -1);
+    DrawWaveform();
 
     return true;
 }
@@ -603,11 +603,10 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
     }
 }
 
-void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
+void MainWindow::DrawWaveform()
 {
     if (m_vecSeqBlocks.size() == 0) return;
     if (m_vecRfLib.size() == 0) return;
-    if(dEndTime < 0) dEndTime = m_dTotalDuration_us;
 
     QPen pen;
     pen.setColor(Qt::blue);
@@ -635,21 +634,17 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
     }
     double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
     m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp+ margin);
-    QCPRange newRange(dStartTime, dEndTime);
+    QCPRange newRange(0, m_dTotalDuration_us);
     m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
     m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
 
-    // 只处理时间范围内的RF
     for(const auto& rfInfo : m_vecRfLib)
     {
-        // 跳过范围外的RF
-        if(rfInfo.startAbsTime_us + rfInfo.duration_us < dStartTime) continue;
-        if(rfInfo.startAbsTime_us > dEndTime) break;
-
         QCPGraph* rfGraph = ui->customPlot->addGraph(m_mapRect["RF"]->axis(QCPAxis::atBottom),
                                                      m_mapRect["RF"]->axis(QCPAxis::atLeft));
         rfGraph->setLineStyle(QCPGraph::lsStepLeft);
         m_vecRfGraphs.append(rfGraph);
+
 
         const auto& rf = rfInfo.event;
         double sampleTime = rfInfo.startAbsTime_us;
@@ -684,7 +679,7 @@ void MainWindow::DrawWaveform(const double& dStartTime, double dEndTime)
         rfGraph->setSelectable(QCP::stWhole);
     }
 
-    UpdatePlotRange(dStartTime, dEndTime);
+    UpdatePlotRange(0, m_dTotalDuration_us);
 }
 
 void MainWindow::SlotExportData()
