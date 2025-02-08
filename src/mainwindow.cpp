@@ -99,6 +99,7 @@ void MainWindow::InitSequenceFigure()
         rect->setRangeZoom(Qt::Horizontal);
         rect->setupFullAxesBox(true);
 
+        rect->axis(QCPAxis::atLeft)->setLabelPadding(10);
         rect->axis(QCPAxis::atLeft)->setLabelFont(labelFont);
     }
 
