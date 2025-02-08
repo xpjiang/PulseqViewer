@@ -5,12 +5,18 @@
 #include <QMap>
 #include <ExternalSequence.h>
 
+typedef QMap<QPair<int, int>, QVector<double>> RfTimeWaveShapeMap;
+
 struct SeqInfo
 {
     double totalDuration_us;
+    double rfMaxAmp_Hz;
+    double rfMinAmp_Hz;
 
     SeqInfo()
         : totalDuration_us(0.)
+        , rfMaxAmp_Hz(0.)
+        , rfMinAmp_Hz(0.)
     {}
 };
 
@@ -55,7 +61,8 @@ signals:
     void loadingCompleted(const SeqInfo& seqInfo,
                           const QVector<SeqBlock*>& blocks,
                           const QMap<int, QVector<float>>& shapeLib,
-                          const QVector<RfInfo>& rfLib
+                          const QVector<RfInfo>& rfLib,
+                          const RfTimeWaveShapeMap& rfMagShapeLib
                           );
     void finished();
 
@@ -65,6 +72,7 @@ private:
     QVector<SeqBlock*>                          m_vecSeqBlock;
     SeqInfo                                     m_stSeqInfo;
     QMap<int, QVector<float>>                   m_mapShapeLib;
+    RfTimeWaveShapeMap                          m_mapRfMagShapeLib;
     QVector<RfInfo>                             m_vecRfLib;
     int64_t                                     m_lRfNum;
 

@@ -330,13 +330,11 @@ void MainWindow::SlotEnableTriggerAxis()
 void MainWindow::SlotResetView()
 {
     if (m_sPulseqFilePathCache.isEmpty()) return;
-    UpdatePlotRange(0, m_objSeqInfo.totalDuration_us);
+    UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
 }
 
 void MainWindow::ClearPulseqCache()
 {
-    m_pVersionLabel->setText("");
-    m_pVersionLabel->setVisible(false);
     m_pProgressBar->hide();
     m_pSelectedGraph = nullptr;
     if (NULL != ui->customPlot)
@@ -346,7 +344,7 @@ void MainWindow::ClearPulseqCache()
         ui->customPlot->replot();
     }
 
-    m_objSeqInfo.totalDuration_us = 0.;
+    m_stSeqInfo.totalDuration_us = 0.;
     m_lRfNum = 0;
 
     m_mapShapeLib.clear();
@@ -411,12 +409,14 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
             this, [this, sPulseqFilePath](const SeqInfo& seqInfo,
                                           const QVector<SeqBlock*>& blocks,
                                           const QMap<int, QVector<float>>& shapeLib,
-                                          const QVector<RfInfo>& rfLib
+                                          const QVector<RfInfo>& rfLib,
+                                          const RfTimeWaveShapeMap& rfMagShapeLib
                                           ) {
-                m_objSeqInfo = seqInfo;
+                m_stSeqInfo = seqInfo;
                 m_vecSeqBlocks = blocks;
                 m_mapShapeLib = shapeLib;
                 m_vecRfLib = rfLib;
+                m_mapRfMagShapeLib = rfMagShapeLib;
                 m_pProgressBar->setValue(100);
                 this->setEnabled(true);
                 this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath);
@@ -430,7 +430,11 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 
 bool MainWindow::ClosePulseqFile()
 {
+    m_pVersionLabel->setVisible(true);
+    m_pVersionLabel->setText("Closing file...");
     ClearPulseqCache();
+    m_pVersionLabel->setVisible(false);
+    m_pVersionLabel->setText("");
     return true;
 }
 
@@ -495,7 +499,7 @@ void MainWindow::onMouseMove(QMouseEvent *event)
         double x2New = x1New + xSpan;
 
         x1New = x1New < 0 ? 0 : x1New;
-        x2New = x2New > m_objSeqInfo.totalDuration_us ? m_objSeqInfo.totalDuration_us : x2New;
+        x2New = x2New > m_stSeqInfo.totalDuration_us ? m_stSeqInfo.totalDuration_us : x2New;
         UpdatePlotRange(x1New, x2New);
     }
 }
@@ -531,7 +535,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
                 double x2New = center + newSpan / 2;
 
                 x1New = x1New < 0 ? 0 : x1New;
-                x2New = x2New > m_objSeqInfo.totalDuration_us ? m_objSeqInfo.totalDuration_us : x2New;
+                x2New = x2New > m_stSeqInfo.totalDuration_us ? m_stSeqInfo.totalDuration_us : x2New;
                 UpdatePlotRange(x1New, x2New);
             }
         }
@@ -554,8 +558,7 @@ void MainWindow::DrawWaveform()
     pen.setJoinStyle(Qt::MiterJoin);
     pen.setCapStyle(Qt::FlatCap);
 
-    double dRfMaxAmp(0.);
-    double dRfMinAmp(0.);
+
     for(const auto& rfInfo : m_vecRfLib)
     {
         QCPGraph* rfGraph = ui->customPlot->addGraph(m_mapRect["RF"]->axis(QCPAxis::atBottom),
@@ -563,42 +566,29 @@ void MainWindow::DrawWaveform()
         rfGraph->setLineStyle(QCPGraph::lsStepLeft);
         m_vecRfGraphs.append(rfGraph);
 
+        QPair<int, int> rfMagShapeID(rfInfo.event->magShape, rfInfo.event->phaseShape);
+        const QVector<double>& amplitudes = m_mapRfMagShapeLib[rfMagShapeID];
 
-        const auto& rf = rfInfo.event;
         double sampleTime = rfInfo.startAbsTime_us;
-        const QVector<float>& vecAmp = m_mapShapeLib[rf->magShape];
-        const QVector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
-
-        const uint32_t& ushSamples = vecAmp.size();
-        QVector<double> timePoints(ushSamples+2, 0.);
-        QVector<double> amplitudes(ushSamples+2, 0.);
-
+        QVector<double> timePoints(rfInfo.samples+2, 0.);
         timePoints[0] = sampleTime;
-        amplitudes[0] = 0;
-        double signal(0.);
-        for(uint32_t index = 0; index < ushSamples; index++)
+        for(uint32_t index = 1; index < amplitudes.size() - 1; index++)
         {
-            const float& amp = vecAmp[index];
-            const float& phase = vecPhase[index];
-            signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
-            timePoints[index+1] = sampleTime;
-            amplitudes[index+1] = signal;
+            timePoints[index] = sampleTime;
             sampleTime += rfInfo.dwell;
-            dRfMaxAmp = std::max(dRfMaxAmp, signal);
-            dRfMinAmp = std::min(dRfMinAmp, signal);
         }
+        timePoints.back() = sampleTime;
 
-        timePoints[ushSamples+1] = sampleTime;
-        amplitudes[ushSamples+1] = 0;
         rfGraph->setData(timePoints, amplitudes);
 
         rfGraph->setPen(pen);
         rfGraph->setSelectable(QCP::stWhole);
     }
-
+    const double& dRfMaxAmp = m_stSeqInfo.rfMaxAmp_Hz;
+    double dRfMinAmp = m_stSeqInfo.rfMinAmp_Hz;
     double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
     m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp + margin);
-    UpdatePlotRange(0, m_objSeqInfo.totalDuration_us);
+    UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
 }
 
 void MainWindow::SlotExportData()
@@ -678,17 +668,17 @@ void MainWindow::onAxisRangeChanged(const QCPRange& newRange)
     if (!axis) return;
 
     // check if exceeding range
-    if (newRange.lower < 0 || newRange.upper > m_objSeqInfo.totalDuration_us) {
+    if (newRange.lower < 0 || newRange.upper > m_stSeqInfo.totalDuration_us) {
         QCPRange boundedRange = newRange;
         if (boundedRange.lower < 0)
         {
             boundedRange.lower = 0;
-            boundedRange.upper = qMin(0 + newRange.size(), m_objSeqInfo.totalDuration_us);
+            boundedRange.upper = qMin(0 + newRange.size(), m_stSeqInfo.totalDuration_us);
         }
-        if (boundedRange.upper > m_objSeqInfo.totalDuration_us)
+        if (boundedRange.upper > m_stSeqInfo.totalDuration_us)
         {
-            boundedRange.upper = m_objSeqInfo.totalDuration_us;
-            boundedRange.lower = qMax(m_objSeqInfo.totalDuration_us - newRange.size(), 0.);
+            boundedRange.upper = m_stSeqInfo.totalDuration_us;
+            boundedRange.lower = qMax(m_stSeqInfo.totalDuration_us - newRange.size(), 0.);
         }
         axis->setRange(boundedRange);
     }

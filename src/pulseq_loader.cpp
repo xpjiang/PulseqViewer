@@ -1,5 +1,7 @@
 #include "pulseq_loader.h"
 
+#include <complex>
+
 PulseqLoader::PulseqLoader(QObject *parent)
     : QObject{parent}
 {
@@ -46,7 +48,7 @@ void PulseqLoader::process()
         return;
     }
 
-    emit loadingCompleted(m_stSeqInfo, m_vecSeqBlock, m_mapShapeLib, m_vecRfLib);
+    emit loadingCompleted(m_stSeqInfo, m_vecSeqBlock, m_mapShapeLib, m_vecRfLib, m_mapRfMagShapeLib);
     emit finished();
 }
 
@@ -55,6 +57,8 @@ bool PulseqLoader::LoadPulseqEvents()
 
     if (m_vecSeqBlock.size() == 0) return true;
     double dCurrentStartTime_us(0.);
+    double dRfMaxAmp(0.);
+    double dRfMinAmp(0.);
     for (const auto& pSeqBlock : m_vecSeqBlock)
     {
         if (pSeqBlock->isRF())
@@ -84,10 +88,36 @@ bool PulseqLoader::LoadPulseqEvents()
                 m_mapShapeLib.insert(phaseShapeID, vecPhase);
             }
 
+            QPair<int, int> magAbsShapeID(magShapeID, phaseShapeID);
+            if (!m_mapRfMagShapeLib.contains(magAbsShapeID))
+            {
+                double sampleTime = rfInfo.startAbsTime_us;
+                const QVector<float>& vecAmp = m_mapShapeLib[rfEvent.magShape];
+                const QVector<float>& vecPhase = m_mapShapeLib[rfEvent.phaseShape];
+                QVector<double> vecMagnitudes(ushSamples+2, 0.);
+
+                vecMagnitudes[0] = 0;
+                double signal(0.);
+                for(uint32_t index = 0; index < ushSamples; index++)
+                {
+                    const float& amp = vecAmp[index];
+                    const float& phase = vecPhase[index];
+                    signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+                    vecMagnitudes[index+1] = signal;
+                    sampleTime += rfInfo.dwell;
+                    dRfMaxAmp = std::max(dRfMaxAmp, signal);
+                    dRfMinAmp = std::min(dRfMinAmp, signal);
+                }
+                vecMagnitudes[ushSamples+1] = 0;
+                m_mapRfMagShapeLib.insert(magAbsShapeID, vecMagnitudes);
+            }
         }
         dCurrentStartTime_us += pSeqBlock->GetDuration();
         m_stSeqInfo.totalDuration_us += pSeqBlock->GetDuration();
     }
+    std::cout << "rf mag lib size: " << m_mapRfMagShapeLib.size() << "\n";
+    m_stSeqInfo.rfMaxAmp_Hz = dRfMaxAmp;
+    m_stSeqInfo.rfMinAmp_Hz = dRfMinAmp;
 
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
     return true;

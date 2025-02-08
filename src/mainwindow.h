@@ -12,6 +12,7 @@
 #define BASIC_WIN_TITLE              ("PulseqViewer")
 #define SAFE_DELETE(p)               { if(p) { delete p; p = nullptr; } }
 
+
 namespace Ui {
 class MainWindow;
 }
@@ -79,9 +80,10 @@ private:
     QStringList                          m_listRecentPulseqFilePaths;
     std::shared_ptr<ExternalSequence>    m_spPulseqSeq;
     QVector<SeqBlock*>                   m_vecSeqBlocks;
-    SeqInfo                              m_objSeqInfo;
+    SeqInfo                              m_stSeqInfo;
 
     QMap<int, QVector<float>>            m_mapShapeLib;
+    RfTimeWaveShapeMap                             m_mapRfMagShapeLib;
     // RF
     uint64_t                             m_lRfNum;
     QVector<RfInfo>                      m_vecRfLib;
