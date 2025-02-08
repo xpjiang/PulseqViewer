@@ -445,8 +445,7 @@ bool MainWindow::LoadPulseqEvents()
             const int& ushSamples = pSeqBlock->GetRFLength();
             const float& fDwell = pSeqBlock->GetRFDwellTime();
             const double& dDuration_us = ushSamples * fDwell;
-            const bool& bIsBlock = IsBlockRf(pSeqBlock->GetRFAmplitudePtr(), pSeqBlock->GetRFPhasePtr(), ushSamples);
-            RfInfo rfInfo(dCurrentStartTime_us+rfEvent.delay, dDuration_us, ushSamples, fDwell, bIsBlock, &rfEvent);
+            RfInfo rfInfo(dCurrentStartTime_us+rfEvent.delay, dDuration_us, ushSamples, fDwell, &rfEvent);
             m_vecRfLib.push_back(rfInfo);
 
             const int& magShapeID = rfEvent.magShape;
@@ -475,22 +474,6 @@ bool MainWindow::LoadPulseqEvents()
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
     DrawWaveform();
 
-    return true;
-}
-
-bool MainWindow::IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples)
-{
-    for (int i = 0; i < iSamples - 1; ++i)
-    {
-        if (!(std::fabs(fAmp[i+1] - fAmp[i]) < 1e-6))
-        {
-            return false;
-        }
-        if (!(std::fabs(fPhase[i+1] - fPhase[i]) < 1e-6))
-        {
-            return false;
-        }
-    }
     return true;
 }
 
@@ -610,7 +593,7 @@ void MainWindow::DrawWaveform()
 
     QPen pen;
     pen.setColor(Qt::blue);
-    // pen.setWidth(2);
+    pen.setWidth(1);
     pen.setJoinStyle(Qt::MiterJoin);
     pen.setCapStyle(Qt::FlatCap);
 
@@ -633,7 +616,7 @@ void MainWindow::DrawWaveform()
         }
     }
     double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
-    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp+ margin);
+    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp + margin);
     QCPRange newRange(0, m_dTotalDuration_us);
     m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
     m_mapRect["RF"]->axis(QCPAxis::atBottom)->setRange(newRange);
@@ -652,8 +635,8 @@ void MainWindow::DrawWaveform()
         const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
 
         const uint32_t& ushSamples = vecAmp.size();
-        QVector<double> timePoints(ushSamples+3, 0.);
-        QVector<double> amplitudes(ushSamples+3, 0.);
+        QVector<double> timePoints(ushSamples+2, 0.);
+        QVector<double> amplitudes(ushSamples+2, 0.);
 
         timePoints[0] = sampleTime;
         amplitudes[0] = 0;
@@ -669,10 +652,7 @@ void MainWindow::DrawWaveform()
         }
 
         timePoints[ushSamples+1] = sampleTime;
-        amplitudes[ushSamples+1] = signal;
-
-        timePoints[ushSamples+2] = sampleTime;
-        amplitudes[ushSamples+2] = 0;
+        amplitudes[ushSamples+1] = 0;
         rfGraph->setData(timePoints, amplitudes);
 
         rfGraph->setPen(pen);

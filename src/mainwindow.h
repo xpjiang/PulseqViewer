@@ -21,7 +21,6 @@ struct RfInfo
     double duration_us;
     uint16_t samples;
     float dwell;
-    bool isBlock;
     const RFEvent* event;
 
     RfInfo(
@@ -29,13 +28,11 @@ struct RfInfo
         const double& dDuration_us,
         const uint16_t ushSamples,
         const float& fDwell,
-        const bool& bIsBlock,
         const RFEvent* pRfEvent)
         : startAbsTime_us(dStartAbsTime_us)
         , duration_us(dDuration_us)
         , samples(ushSamples)
         , dwell(fDwell)
-        , isBlock(bIsBlock)
         , event(pRfEvent)
     {}
 };
@@ -91,7 +88,6 @@ private:
     bool LoadPulseqFile(const QString& sPulseqFilePath);
     bool ClosePulseqFile();
     bool LoadPulseqEvents();
-    bool IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples);
 
 private:
     Ui::MainWindow                       *ui;
