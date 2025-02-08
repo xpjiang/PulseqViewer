@@ -192,9 +192,6 @@
    </property>
   </action>
   <action name="actionResetView">
-   <property name="icon">
-    <iconset theme="QIcon::ThemeIcon::ViewRestore"/>
-   </property>
    <property name="text">
     <string>Reset View</string>
    </property>
