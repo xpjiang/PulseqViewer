@@ -87,7 +87,7 @@ struct RfInfo
     RfInfo(
         const double& dStartAbsTime_us,
         const double& dDuration_us,
-        const uint16_t ushSamples,
+        const uint16_t& ushSamples,
         const float& fDwell,
         const RFEvent* rfEvent)
         : startAbsTime_us(dStartAbsTime_us)
@@ -120,6 +120,35 @@ struct GradTrapInfo
     {}
 };
 
+
+struct AdcInfo
+{
+    double startAbsTime_us;
+    double duration_us;
+    int samples;
+    int dwell_ns;
+    QVector<double> time;
+    QVector<double> amplitude;
+    const ADCEvent* event;
+
+    AdcInfo(
+        const double& dStartAbsTime_us,
+        const double& dDuration_us,
+        const int& ushSamples,
+        const int& fDwell,
+        const QVector<double>& vecTime,
+        const QVector<double>& vecAmplitude,
+        const ADCEvent* rfEvent)
+        : startAbsTime_us(dStartAbsTime_us)
+        , duration_us(dDuration_us)
+        , samples(ushSamples)
+        , dwell_ns(fDwell)
+        , time(vecTime)
+        , amplitude(vecAmplitude)
+        , event(rfEvent)
+    {}
+};
+
 class PulseqLoader : public QObject
 {
     Q_OBJECT
@@ -143,7 +172,8 @@ signals:
                           const RfTimeWaveShapeMap& rfMagShapeLib,
                           QVector<GradTrapInfo> gzLib,
                           QVector<GradTrapInfo> gyLib,
-                          QVector<GradTrapInfo> gxLib
+                          QVector<GradTrapInfo> gxLib,
+                          QVector<AdcInfo>      adcLib
                           );
     void finished();
 
@@ -158,6 +188,7 @@ private:
     QVector<GradTrapInfo>                       m_vecGzLib;
     QVector<GradTrapInfo>                       m_vecGyLib;
     QVector<GradTrapInfo>                       m_vecGxLib;
+    QVector<AdcInfo>                            m_vecAdcLib;
 
 private:
     bool LoadPulseqEvents();

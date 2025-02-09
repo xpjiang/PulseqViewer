@@ -69,6 +69,9 @@ private slots:
     void onAxisRangeChanged(const QCPRange &newRange);
     void onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event);
     void setInteraction(const bool& enable);
+    void resizeEvent(QResizeEvent *event) override;
+    void handleDPIChange();
+    void windowScreenChanged(QScreen *screen);
 
 private:
     Ui::MainWindow                       *ui;
@@ -104,11 +107,15 @@ private:
 
     // ADC
     uint64_t                             m_lAdcNum;
-    QVector<ADCEvent>                    m_vecAdcLib;
+    QVector<AdcInfo>                     m_vecAdcLib;
 
     // Plot
+    QMap<QString, QVector<QCPGraph*>>    m_mapGraphs;
     QVector<QCPGraph*>                   m_vecRfGraphs;
     QVector<QCPGraph*>                   m_vecGzGraphs;
+    QVector<QCPGraph*>                   m_vecGyGraphs;
+    QVector<QCPGraph*>                   m_vecGxGraphs;
+    QVector<QCPGraph*>                   m_vecAdcGraphs;
     QMap<QString, QCPAxisRect*>          m_mapRect;
     QMap<QString, QAction*>              m_mapAxisAction;
     QList<QString>                       m_listAxis;

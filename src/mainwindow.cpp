@@ -36,6 +36,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_pSelectionRect->setVisible(false);
     m_pSelectionRect->setBrush(QBrush(QColor(128, 128, 128, 128)));
     m_pSelectionRect->setPen(QPen(Qt::black, 1));
+
+
 }
 
 MainWindow::~MainWindow()
@@ -69,13 +71,27 @@ void MainWindow::InitStatusBar()
 
 void MainWindow::InitSequenceFigure()
 {
+    QScreen *screen = QGuiApplication::primaryScreen();
+    qreal devicePixelRatio = screen->devicePixelRatio();
+
+    connect(screen, &QScreen::logicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
+    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
+
     ui->customPlot->plotLayout()->clear();
 
     // ui->customPlot->setNotAntialiasedElements(QCP::aeAll);  // 关闭抗锯齿
-    ui->customPlot->setPlottingHints(QCP::phFastPolylines);
-    ui->customPlot->setOpenGl(true, 4);
-    ui->customPlot->setBufferDevicePixelRatio(devicePixelRatio());
+    ui->customPlot->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);
+    ui->customPlot->setNoAntialiasingOnDrag(true);
+    ui->customPlot->setBufferDevicePixelRatio(devicePixelRatio);
     ui->customPlot->setAntialiasedElements(QCP::aeAll);
+    // ui->customPlot->setOpenGl(true);
+
+    const bool& enableOpenGL = ui->customPlot->openGl();
+    if (!enableOpenGL)
+    {
+        QMessageBox::information(this, "Fail", "OpenGL init failed!");
+        // return;
+    }
     setInteraction(false);
 
     uint8_t index(0);
@@ -85,7 +101,6 @@ void MainWindow::InitSequenceFigure()
         m_mapRect[axis] = new QCPAxisRect(ui->customPlot);
         m_mapRect[axis]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
         m_mapRect[axis]->axis(QCPAxis::atLeft)->setNumberFormat("g");
-        // m_mapRect[axis]->axis(QCPAxis::atLeft)->setNumberPrecision(2);
         ui->customPlot->plotLayout()->addElement(index, 0, m_mapRect[axis]);
     }
 
@@ -94,6 +109,11 @@ void MainWindow::InitSequenceFigure()
     m_mapRect["GY"]->axis(QCPAxis::atLeft)->setLabel("GY (Hz/m)");
     m_mapRect["GX"]->axis(QCPAxis::atLeft)->setLabel("GX (Hz/m)");
     m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setLabel("ADC");
+
+    QSharedPointer<QCPAxisTickerText> ticker(new QCPAxisTickerText);
+    ticker->addTick(0, "0");
+    ticker->addTick(1, "1");
+    m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setTicker(ticker);
 
     QMargins margins(70, 10, 10, 10);
     QFont labelFont;
@@ -113,10 +133,13 @@ void MainWindow::InitSequenceFigure()
     UpdateAxisVisibility();
 
     m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setRange(0, 1.3);
+    ui->customPlot->replot();
 }
 
 void MainWindow::InitSlots()
 {
+    connect(windowHandle(), &QWindow::screenChanged, this, &MainWindow::windowScreenChanged);
+
     // File
     connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::SlotOpenPulseqFile);
     connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::SlotReOpenPulseqFile);
@@ -342,9 +365,19 @@ void MainWindow::ClearPulseqCache()
         ui->customPlot->clearGraphs();
         m_vecRfGraphs.clear();
         m_vecGzGraphs.clear();
+        m_vecGyGraphs.clear();
+        m_vecGxGraphs.clear();
+        m_vecAdcGraphs.clear();
         for (auto& axis : m_listAxis)
         {
-            m_mapRect[axis]->axis(QCPAxis::atLeft)->setRange(0, 5);
+            if (axis == "ADC")
+            {
+                m_mapRect[axis]->axis(QCPAxis::atLeft)->setRange(0, 1.3);
+            }
+            else
+            {
+                m_mapRect[axis]->axis(QCPAxis::atLeft)->setRange(0, 5);
+            }
             m_mapRect[axis]->axis(QCPAxis::atBottom)->setRange(0, 100);
         }
         ui->customPlot->replot();
@@ -417,14 +450,15 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 
     connect(loader, &PulseqLoader::loadingCompleted,
             this, [this, sPulseqFilePath](const SeqInfo& seqInfo,
-                                           const QVector<SeqBlock*>& blocks,
-                                           const QMap<int, QVector<float>>& shapeLib,
-                                           const QVector<RfInfo>& rfLib,
-                                           const RfTimeWaveShapeMap& rfMagShapeLib,
-                                           const QVector<GradTrapInfo>& gzLib,
-                                           const QVector<GradTrapInfo>& gyLib,
-                                           const QVector<GradTrapInfo>& gxLib
-                                          ) {
+                                        const QVector<SeqBlock*>& blocks,
+                                        const QMap<int, QVector<float>>& shapeLib,
+                                        const QVector<RfInfo>& rfLib,
+                                        const RfTimeWaveShapeMap& rfMagShapeLib,
+                                        const QVector<GradTrapInfo>& gzLib,
+                                        const QVector<GradTrapInfo>& gyLib,
+                                        const QVector<GradTrapInfo>& gxLib,
+                                        const QVector<AdcInfo>& adcLib
+                                        ) {
                 m_stSeqInfo = seqInfo;
                 m_vecSeqBlocks = blocks;
                 m_mapShapeLib = shapeLib;
@@ -433,6 +467,7 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
                 m_vecGzLib = gzLib;
                 m_vecGyLib = gyLib;
                 m_vecGxLib = gxLib;
+                m_vecAdcLib = adcLib;
                 DrawWaveform();
                 this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath + QString("(") + m_sPulseqVersion + QString(")"));
                 this->setWindowFilePath(sPulseqFilePath);
@@ -507,7 +542,7 @@ void MainWindow::DrawWaveform()
     {
         QCPGraph* gzGraph = ui->customPlot->addGraph(m_mapRect["GZ"]->axis(QCPAxis::atBottom),
                                                      m_mapRect["GZ"]->axis(QCPAxis::atLeft));
-        m_vecGzGraphs.append(gzGraph);
+        m_vecGyGraphs.append(gzGraph);
 
         const QVector<double>& time = gzInfo.time;
         const QVector<double>& amplitudes = gzInfo.amplitude;
@@ -526,7 +561,7 @@ void MainWindow::DrawWaveform()
     {
         QCPGraph* gyGraph = ui->customPlot->addGraph(m_mapRect["GY"]->axis(QCPAxis::atBottom),
                                                      m_mapRect["GY"]->axis(QCPAxis::atLeft));
-        m_vecGzGraphs.append(gyGraph);
+        m_vecGxGraphs.append(gyGraph);
 
         const QVector<double>& time = gyInfo.time;
         const QVector<double>& amplitudes = gyInfo.amplitude;
@@ -559,6 +594,20 @@ void MainWindow::DrawWaveform()
     double maxGxAbsAmp = std::max(std::abs(gxMaxAmp_Hz_m), std::abs(gxMinAmp_Hz_m));
     double marginGx = maxGxAbsAmp * 0.1;
     m_mapRect["GX"]->axis(QCPAxis::atLeft)->setRange(- maxGxAbsAmp - marginGx, maxGxAbsAmp + marginGx);
+
+    for(const auto& adcInfo : m_vecAdcLib)
+    {
+        QCPGraph* adcGraph = ui->customPlot->addGraph(m_mapRect["ADC"]->axis(QCPAxis::atBottom),
+                                                     m_mapRect["ADC"]->axis(QCPAxis::atLeft));
+        m_vecAdcGraphs.append(adcGraph);
+
+        const QVector<double>& time = adcInfo.time;
+        const QVector<double>& amplitudes = adcInfo.amplitude;
+        adcGraph->setData(time, amplitudes);
+
+        adcGraph->setPen(pen);
+        adcGraph->setSelectable(QCP::stWhole);
+    }
 
 
     UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
@@ -697,8 +746,33 @@ void MainWindow::SlotExportData()
     }
 
     // 找到选中的graph在vector中的索引
-    int graphIndex = m_vecRfGraphs.indexOf(m_pSelectedGraph);
-    if(graphIndex == -1) return;
+    int graphIndex(-1);
+
+    if (std::find(m_vecRfGraphs.begin(), m_vecRfGraphs.end(), m_pSelectedGraph) != m_vecRfGraphs.end())
+    {
+        graphIndex = m_vecRfGraphs.indexOf(m_pSelectedGraph);
+    }
+    else if (std::find(m_vecGzGraphs.begin(), m_vecGzGraphs.end(), m_pSelectedGraph) != m_vecGzGraphs.end())
+    {
+        graphIndex = m_vecGzGraphs.indexOf(m_pSelectedGraph);
+    }
+    else if (std::find(m_vecGyGraphs.begin(), m_vecGyGraphs.end(), m_pSelectedGraph) != m_vecGyGraphs.end())
+    {
+        graphIndex = m_vecGyGraphs.indexOf(m_pSelectedGraph);
+    }
+    else if (std::find(m_vecGxGraphs.begin(), m_vecGxGraphs.end(), m_pSelectedGraph) != m_vecGxGraphs.end())
+    {
+        graphIndex = m_vecGxGraphs.indexOf(m_pSelectedGraph);
+    }
+    else if (std::find(m_vecAdcGraphs.begin(), m_vecAdcGraphs.end(), m_pSelectedGraph) != m_vecAdcGraphs.end())
+    {
+        graphIndex = m_vecAdcGraphs.indexOf(m_pSelectedGraph);
+    }
+    else
+    {
+        return;
+    }
+
     // QString fileName = QFileDialog::getSaveFileName(this,
     //                                                 tr("保存波形数据"), "",
     //                                                 tr("文本文件 (*.txt);;所有文件 (*)"));
@@ -796,4 +870,53 @@ void MainWindow::onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex
     m_pSelectedGraph = graph;
 }
 
+void MainWindow::handleDPIChange()
+{
+    QScreen *screen = QGuiApplication::primaryScreen();
+    if (!screen) return;
+
+    qreal newDpr = screen->devicePixelRatio();
+    ui->customPlot->setBufferDevicePixelRatio(newDpr);
+
+    // 更新渲染设置
+    QSurfaceFormat format;
+    format.setSamples(16 * newDpr);  // 根据 DPI 调整采样
+    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+    QSurfaceFormat::setDefaultFormat(format);
+
+    // 强制重绘
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+// 3. 如果有窗口大小改变事件，也需要处理
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+
+    // 重新设置缩放
+    QScreen *screen = QGuiApplication::primaryScreen();
+    if (screen) {
+        ui->customPlot->setBufferDevicePixelRatio(screen->devicePixelRatio());
+        ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
+    }
+}
+
+void MainWindow::windowScreenChanged(QScreen *screen)
+{
+    if (!screen) return;
+
+    // 断开旧的连接
+    for (QScreen *s : QGuiApplication::screens()) {
+        disconnect(s, &QScreen::logicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
+        disconnect(s, &QScreen::physicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
+    }
+
+    // 连接新显示器的信号
+    connect(screen, &QScreen::logicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
+    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
+
+    // 更新当前显示器的 DPI 设置
+    ui->customPlot->setBufferDevicePixelRatio(screen->devicePixelRatio());
+    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
+}
 
