@@ -10,14 +10,27 @@ typedef QMap<QPair<int, int>, QVector<double>> RfTimeWaveShapeMap;
 struct SeqInfo
 {
     double totalDuration_us;
+    // RF
+    uint64_t rfNum;
     double rfMaxAmp_Hz;
     double rfMinAmp_Hz;
 
     SeqInfo()
         : totalDuration_us(0.)
+        , rfNum(0)
         , rfMaxAmp_Hz(0.)
         , rfMinAmp_Hz(0.)
     {}
+
+    void reset()
+    {
+        totalDuration_us = 0;
+
+        // RF
+        rfNum = 0;
+        rfMaxAmp_Hz = 0.;
+        rfMinAmp_Hz = 0.;
+    }
 };
 
 struct RfInfo
@@ -74,7 +87,6 @@ private:
     QMap<int, QVector<float>>                   m_mapShapeLib;
     RfTimeWaveShapeMap                          m_mapRfMagShapeLib;
     QVector<RfInfo>                             m_vecRfLib;
-    int64_t                                     m_lRfNum;
 
 private:
     bool LoadPulseqEvents();

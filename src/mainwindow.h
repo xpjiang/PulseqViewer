@@ -40,12 +40,12 @@ private:
     void ClearPulseqCache();
     bool LoadPulseqFile(const QString& sPulseqFilePath);
     bool ClosePulseqFile();
+    void DrawWaveform();
 
 private slots:
     // Slots-File
     void SlotOpenPulseqFile();
     void SlotReOpenPulseqFile();
-    void SlotEnableAxisToolbar();
     void SlotEnableRFAxis();
     void SlotEnableGZAxis();
     void SlotEnableGYAxis();
@@ -64,11 +64,11 @@ private slots:
     void onMousePress(QMouseEvent* event);
     void onMouseMove(QMouseEvent* event);
     void onMouseRelease(QMouseEvent* event);
-    void DrawWaveform();
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void onAxisRangeChanged(const QCPRange &newRange);
     void onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event);
+    void setInteraction(const bool& enable);
 
 private:
     Ui::MainWindow                       *ui;
@@ -82,12 +82,12 @@ private:
     QStringList                          m_listRecentPulseqFilePaths;
     std::shared_ptr<ExternalSequence>    m_spPulseqSeq;
     QVector<SeqBlock*>                   m_vecSeqBlocks;
+    QString                              m_sPulseqVersion;
     SeqInfo                              m_stSeqInfo;
 
     QMap<int, QVector<float>>            m_mapShapeLib;
-    RfTimeWaveShapeMap                             m_mapRfMagShapeLib;
+    RfTimeWaveShapeMap                   m_mapRfMagShapeLib;
     // RF
-    uint64_t                             m_lRfNum;
     QVector<RfInfo>                      m_vecRfLib;
 
     // GZ
