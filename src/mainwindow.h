@@ -47,6 +47,8 @@ private:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
+    void onMouseMove(QMouseEvent* event);
+
     // Pulseq
     void ClearPulseqCache();
     bool LoadPulseqFile(const QString& sPulseqFilePath);
@@ -57,6 +59,7 @@ private:
 
 private:
     Ui::MainWindow                       *ui;
+    
 
     QLabel                               *m_pVersionLabel;
     QProgressBar                         *m_pProgressBar;
@@ -73,7 +76,8 @@ private:
 
     // Plot rect
 	QVector<QCPAxisRect*>                m_vecRects; // 0: ADC label, 1: RF Mag, 2: RF ADC phase, 3: Gx, 4: Gy, 5: Gz
-
+    QVector<QCPItemTracer*> m_vecTracers; // 添加数据光标成员变量
+    QVector <QCPItemStraightLine*> m_vecVerticalLine; // 添加垂直线成员变量
     QCPAxisRect*                         m_pADCLabelsRect;
     QCPAxisRect*                         m_pRfMagRect;
 	QCPAxisRect*                         m_pRfADCPhaseRect;

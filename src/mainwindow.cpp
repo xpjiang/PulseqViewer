@@ -18,12 +18,43 @@ MainWindow::MainWindow(QWidget *parent)
 {
 	ui->setupUi(this);
 	setAcceptDrops(true);
+
+	m_vecVerticalLine = QVector<QCPItemStraightLine*>(6);
+	for (int i = 0; i < 6; i++)
+	{
+
+		auto VerticalLine = new QCPItemStraightLine(ui->customPlot);
+		VerticalLine->setVisible(false);
+		QPen pen(Qt::red);
+		pen.setStyle(Qt::DashLine); // 设置为虚线样式
+		pen.setWidthF(0.5); // 设置线宽
+		VerticalLine->setPen(pen);
+		VerticalLine->point1->setType(QCPItemPosition::ptPlotCoords);
+		VerticalLine->point2->setType(QCPItemPosition::ptPlotCoords);
+		VerticalLine->setClipToAxisRect(true); // 使垂直线受单个坐标轴的限制
+		m_vecVerticalLine[i] = (VerticalLine);
+	}
+
+
 	Init();
 
 	m_listRecentPulseqFilePaths.resize(10);
 
 	m_pSelectionRect = new QCPItemRect(ui->customPlot);
 	m_pSelectionRect->setVisible(false);
+
+	// 初始化垂直线
+	//m_pVerticalLine = new QCPItemStraightLine(ui->customPlot);
+	//m_pVerticalLine->setVisible(false);
+	//QPen pen(Qt::red);
+	//pen.setStyle(Qt::DashLine); // 设置为虚线样式
+	//pen.setWidthF(0.5); // 设置线宽
+	//m_pVerticalLine->setPen(pen);
+	//m_pVerticalLine->point1->setCoords(0, 0);
+	//m_pVerticalLine->point2->setCoords(0, 1);
+	//m_pVerticalLine->setClipToAxisRect(false); // 使垂直线不受单个坐标轴的限制
+	
+
 }
 
 MainWindow::~MainWindow()
@@ -55,6 +86,9 @@ void MainWindow::InitSlots()
 	//connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
 	//connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
 	//connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
+
+	// Interaction
+	connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
 }
 
 void MainWindow::InitStatusBar()
@@ -178,6 +212,25 @@ void MainWindow::InitSequenceFigure()
 		QColor::fromRgbF(0.635,0.078,0.184)
 	});
 	
+	// 初始化每个 QCPAxisRect 的数据光标
+	for (auto rect : m_vecRects)
+	{
+		QCPItemTracer* tracer = new QCPItemTracer(ui->customPlot);
+		tracer->setClipAxisRect(rect);
+		tracer->setVisible(false);
+		//tracer->setStyle(QCPItemTracer::tsCrosshair);
+		tracer->setPen(QPen(Qt::red));
+		m_vecTracers.append(tracer);
+	}
+
+	for (size_t i = 0; i < m_vecRects.size(); i++)
+	{
+		m_vecVerticalLine[i]->setClipAxisRect(m_vecRects[i]);
+		m_vecVerticalLine[i]->point1->setAxisRect(m_vecRects[i]);
+		m_vecVerticalLine[i]->point2->setAxisRect(m_vecRects[i]);
+		m_vecVerticalLine[i]->point1->setAxes(m_vecRects[i]->axis(QCPAxis::atBottom), m_vecRects[i]->axis(QCPAxis::atLeft));
+		m_vecVerticalLine[i]->point2->setAxes(m_vecRects[i]->axis(QCPAxis::atBottom), m_vecRects[i]->axis(QCPAxis::atLeft));
+	}
 	// plot RF
 	// m_vecRects[1]
 	// 模拟多组RF的显示，
@@ -742,3 +795,96 @@ void MainWindow::dropEvent(QDropEvent *event)
 }
 
 
+void MainWindow::onMouseMove(QMouseEvent* event)
+{
+	//double x = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
+
+	//double minDist = std::numeric_limits<double>::max();
+	//double closestX = 0;
+	//bool found = false;
+
+	//// 遍历所有 QCPAxisRect 中的所有图表
+	//for (auto rect : m_vecRects)
+	//{
+	//	for (int i = 0; i < rect->graphs().size(); ++i)
+	//	{
+	//		QCPGraph* graph = rect->graphs().at(i);
+	//		if (graph)
+	//		{
+	//			for (int j = 0; j < graph->dataCount(); ++j)
+	//			{
+	//				double dist = std::abs(graph->data()->at(j)->key - x);
+	//				if (dist < minDist)
+	//				{
+	//					minDist = dist;
+	//					closestX = graph->data()->at(j)->key;
+	//					found = true;
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
+
+	//if (found)
+	//{
+	//	for (int i = 0; i < m_vecRects.size(); ++i)
+	//	{
+	//		m_vecTracers[i]->position->setCoords(closestX, m_vecRects[i]->axis(QCPAxis::atLeft)->range().center());
+	//		m_vecTracers[i]->setVisible(true);
+	//	}
+	//	ui->customPlot->replot();
+	//}
+	//else
+	//{
+	//	for (auto tracer : m_vecTracers)
+	//	{
+	//		tracer->setVisible(false);
+	//	}
+	//}
+
+	double x = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
+
+	double minDist = std::numeric_limits<double>::max();
+	double closestX = 0;
+	bool found = false;
+
+	// 遍历所有 QCPAxisRect 中的所有图表
+	for (auto rect : m_vecRects)
+	{
+		for (int i = 0; i < rect->graphs().size(); ++i)
+		{
+			QCPGraph* graph = rect->graphs().at(i);
+			if (graph)
+			{
+				for (int j = 0; j < graph->dataCount(); ++j)
+				{
+					double dist = std::abs(graph->data()->at(j)->key - x);
+					if (dist < minDist)
+					{
+						minDist = dist;
+						closestX = graph->data()->at(j)->key;
+						found = true;
+					}
+				}
+			}
+		}
+	}
+
+	if (found)
+	{
+		for (int i = 0; i < m_vecVerticalLine.count(); i++)
+		{
+			m_vecVerticalLine[i]->point1->setCoords(closestX, m_vecRects[i]->axis(QCPAxis::atBottom)->range().lower);
+			m_vecVerticalLine[i]->point2->setCoords(closestX, m_vecRects[i]->axis(QCPAxis::atBottom)->range().upper);
+			m_vecVerticalLine[i]->setVisible(true);
+		}
+		ui->customPlot->replot();
+	}
+	else
+	{
+		for (auto VerticalLine : m_vecVerticalLine)
+		{
+			VerticalLine->setVisible(false);
+		}
+	}
+}
