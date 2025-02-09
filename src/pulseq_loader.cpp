@@ -52,7 +52,13 @@ void PulseqLoader::process()
         return;
     }
 
-    emit loadingCompleted(m_stSeqInfo, m_vecSeqBlock, m_mapShapeLib, m_vecRfLib, m_mapRfMagShapeLib);
+    emit loadingCompleted(m_stSeqInfo,
+                          m_vecSeqBlock,
+                          m_mapShapeLib,
+                          m_vecRfLib,
+                          m_mapRfMagShapeLib,
+                          m_vecGzLib
+                          );
     emit finished();
 }
 
@@ -112,11 +118,31 @@ bool PulseqLoader::LoadPulseqEvents()
                 m_mapRfMagShapeLib.insert(magAbsShapeID, vecMagnitudes);
             }
         }
+
+        GradAxis gradAxis;
+
+        double gzMaxAmp(0.);
+        double gzMinAmp(0.);
+        if (pSeqBlock->isTrapGradient(gradAxis = kGZ))
+        {
+            const GradEvent& gradEvent = pSeqBlock->GetGradEvent(gradAxis);
+            const float& amp = gradEvent.amplitude;
+            gzMaxAmp = std::max(gzMaxAmp, (double)amp);
+            gzMinAmp = std::min(gzMinAmp, (double)amp);
+            int duration_us = gradEvent.rampUpTime + gradEvent.flatTime + gradEvent.rampDownTime;
+            double absStartTime_us = dCurrentStartTime_us+gradEvent.delay;
+            QVector<double> time{absStartTime_us, absStartTime_us+gradEvent.rampUpTime, absStartTime_us+gradEvent.rampUpTime+gradEvent.flatTime, absStartTime_us+duration_us};
+            QVector<double> amplitudes{0, amp, amp, 0};
+            GradTrapInfo gradTrapInfo(absStartTime_us, duration_us, time, amplitudes, &gradEvent);
+            m_vecGzLib.push_back(gradTrapInfo);
+        }
+
         dCurrentStartTime_us += pSeqBlock->GetDuration();
         m_stSeqInfo.totalDuration_us += pSeqBlock->GetDuration();
+        m_stSeqInfo.gzMaxAmp_Hz_m = gzMaxAmp;
+        m_stSeqInfo.gzMinAmp_Hz_m = gzMinAmp;
     }
-    std::cout << "rf mag lib size: " << m_mapRfMagShapeLib.size() << "\n";
-
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
+    std::cout << m_vecGzLib.size() << " GZ events detetced!\n";
     return true;
 }

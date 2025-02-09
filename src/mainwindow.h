@@ -92,7 +92,7 @@ private:
 
     // GZ
     uint64_t                             m_lGzNum;
-    QVector<GradEvent>                   m_vecGzLib;
+    QVector<GradTrapInfo>                m_vecGzLib;
 
     // GY
     uint64_t                             m_lGyNum;
@@ -108,6 +108,7 @@ private:
 
     // Plot
     QVector<QCPGraph*>                   m_vecRfGraphs;
+    QVector<QCPGraph*>                   m_vecGzGraphs;
     QMap<QString, QCPAxisRect*>          m_mapRect;
     QMap<QString, QAction*>              m_mapAxisAction;
     QList<QString>                       m_listAxis;
@@ -117,7 +118,7 @@ private:
     bool                                 m_bIsDragging;
     QPoint                               m_objSelectStartPos;
     QCPItemRect*                         m_pSelectionRect;
-    QPoint                               m_objDragStartPos;       // 记录拖拽起始位置
+    QPoint                               m_objDragStartPos;
     double                               m_dDragStartRange;
     QCPGraph*                            m_pSelectedGraph;
 };

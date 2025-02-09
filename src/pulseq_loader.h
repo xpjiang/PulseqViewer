@@ -7,6 +7,13 @@
 
 typedef QMap<QPair<int, int>, QVector<double>> RfTimeWaveShapeMap;
 
+enum GradAxis
+{
+    kGX = 0,
+    kGY = 1,
+    kGZ = 2
+};
+
 struct SeqInfo
 {
     double totalDuration_us;
@@ -15,11 +22,19 @@ struct SeqInfo
     double rfMaxAmp_Hz;
     double rfMinAmp_Hz;
 
+    // GZ
+    uint64_t gzNum;
+    double gzMaxAmp_Hz_m;
+    double gzMinAmp_Hz_m;
+
     SeqInfo()
         : totalDuration_us(0.)
         , rfNum(0)
         , rfMaxAmp_Hz(0.)
         , rfMinAmp_Hz(0.)
+        , gzNum(0)
+        , gzMaxAmp_Hz_m(0.)
+        , gzMinAmp_Hz_m(0.)
     {}
 
     void reset()
@@ -30,6 +45,10 @@ struct SeqInfo
         rfNum = 0;
         rfMaxAmp_Hz = 0.;
         rfMinAmp_Hz = 0.;
+        // GZ
+        gzNum = 0;
+        gzMaxAmp_Hz_m = 0.;
+        gzMinAmp_Hz_m = 0.;
     }
 };
 
@@ -46,12 +65,34 @@ struct RfInfo
         const double& dDuration_us,
         const uint16_t ushSamples,
         const float& fDwell,
-        const RFEvent* pRfEvent)
+        const RFEvent* rfEvent)
         : startAbsTime_us(dStartAbsTime_us)
         , duration_us(dDuration_us)
         , samples(ushSamples)
         , dwell(fDwell)
-        , event(pRfEvent)
+        , event(rfEvent)
+    {}
+};
+
+struct GradTrapInfo
+{
+    double startAbsTime_us;
+    long duration_us;
+    QVector<double> time;
+    QVector<double> amplitude;
+    const GradEvent* event;
+
+    GradTrapInfo(
+        const double& dStartAbsTime_us,
+        const double& dDuration_us,
+        const QVector<double>& vecTime,
+        const QVector<double>& vecAmplitude,
+        const GradEvent* gradEvent)
+        : startAbsTime_us(dStartAbsTime_us)
+        , duration_us(dDuration_us)
+        , time(vecTime)
+        , amplitude(vecAmplitude)
+        , event(gradEvent)
     {}
 };
 
@@ -75,7 +116,8 @@ signals:
                           const QVector<SeqBlock*>& blocks,
                           const QMap<int, QVector<float>>& shapeLib,
                           const QVector<RfInfo>& rfLib,
-                          const RfTimeWaveShapeMap& rfMagShapeLib
+                          const RfTimeWaveShapeMap& rfMagShapeLib,
+                          QVector<GradTrapInfo> gzLib
                           );
     void finished();
 
@@ -87,6 +129,7 @@ private:
     QMap<int, QVector<float>>                   m_mapShapeLib;
     RfTimeWaveShapeMap                          m_mapRfMagShapeLib;
     QVector<RfInfo>                             m_vecRfLib;
+    QVector<GradTrapInfo>                       m_vecGzLib;
 
 private:
     bool LoadPulseqEvents();
