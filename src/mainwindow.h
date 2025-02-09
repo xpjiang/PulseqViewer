@@ -15,23 +15,6 @@ namespace Ui {
 class MainWindow;
 }
 
-struct RfInfo
-{
-    double startAbsTime_us;
-    double duration_us;
-    uint16_t samples;
-    float dwell;
-    const RFEvent* event;
-
-    RfInfo(const double& dStartAbsTime_us, const double& dDuration_us, const uint16_t ushSamples, const float& fDwell, const RFEvent* pRfEvent)
-        : startAbsTime_us(dStartAbsTime_us)
-        , duration_us(dDuration_us)
-        , samples(ushSamples)
-        , dwell(fDwell)
-        , event(pRfEvent)
-    {}
-};
-
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -57,6 +40,10 @@ private:
 
     // Slots-Interaction
     void DrawRFWaveform(const double& dStartTime = 0, double dEndTime = -1);
+    void DrawADCWaveform(const double& dStartTime = 0, double dEndTime = -1);
+    void DrawGWaveform(const double& dStartTime = 0, double dEndTime = -1);
+	void DrawBlockEdges();
+
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
@@ -64,7 +51,6 @@ private:
     void ClearPulseqCache();
     bool LoadPulseqFile(const QString& sPulseqFilePath);
     bool ClosePulseqFile();
-    bool LoadPulseqEvents();
     bool IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples);
 
     std::tuple<double, size_t> calcRfCenter(const std::vector<double>& signal, const std::vector<double>& t);
@@ -75,37 +61,18 @@ private:
     QLabel                               *m_pVersionLabel;
     QProgressBar                         *m_pProgressBar;
 
+    QVector<QColor> colors; // same as matlab for plot
+
     // Pulseq
     QString                              m_sPulseqFilePath;
     QString                              m_sPulseqFilePathCache;
     QStringList                          m_listRecentPulseqFilePaths;
     std::shared_ptr<ExternalSequence>    m_spPulseqSeq;
-    std::vector<SeqBlock*>               m_vecSeqBlocks;
+    std::vector<SeqBlock*>               m_vecDecodeSeqBlocks;
     double                               m_dTotalDuration_us;
 
-    QMap<int, std::vector<float>>        m_mapShapeLib;
-    // RF
-    uint64_t                             m_lRfNum;
-    QVector<RfInfo>                      m_vecRfLib;
-
-    // GZ
-    uint64_t                             m_lGzNum;
-    QVector<GradEvent>                   m_vecGzLib;
-
-    // GY
-    uint64_t                             m_lGyNum;
-    QVector<GradEvent>                   m_vecGyLib;
-
-    // GX
-    uint64_t                             m_lGxNum;
-    QVector<GradEvent>                   m_vecGxLib;
-
-    // ADC
-    uint64_t                             m_lAdcNum;
-    QVector<ADCEvent>                    m_vecAdcLib;
-
-    // Plot
-    QVector<QCPAxisRect*>                m_vecRects;
+    // Plot rect
+	QVector<QCPAxisRect*>                m_vecRects; // 0: ADC label, 1: RF Mag, 2: RF ADC phase, 3: Gx, 4: Gy, 5: Gz
 
     QCPAxisRect*                         m_pADCLabelsRect;
     QCPAxisRect*                         m_pRfMagRect;
@@ -114,7 +81,15 @@ private:
     QCPAxisRect*                         m_pGyRect;
     QCPAxisRect*                         m_pGzRect;
 
-
+    //
+    int nBlockRangeStart; // ui
+	int nBlockRangeEnd; // ui
+    bool bShowBlocksEdges; // ui
+	QVector<double> vecBlockEdges; // ui
+	QVector<QString> validTimeUnits = { "s","ms","us" }; // ui
+	QVector<double> tFactorList = { 1e-6, 1e-3, 1 }; // ui
+	QString TimeUnits; // ui
+	double tFactor; // ui
 
 
     // Interaction
