@@ -27,6 +27,16 @@ struct SeqInfo
     double gzMaxAmp_Hz_m;
     double gzMinAmp_Hz_m;
 
+    // GY
+    uint64_t gyNum;
+    double gyMaxAmp_Hz_m;
+    double gyMinAmp_Hz_m;
+
+    // GX
+    uint64_t gxNum;
+    double gxMaxAmp_Hz_m;
+    double gxMinAmp_Hz_m;
+
     SeqInfo()
         : totalDuration_us(0.)
         , rfNum(0)
@@ -35,6 +45,12 @@ struct SeqInfo
         , gzNum(0)
         , gzMaxAmp_Hz_m(0.)
         , gzMinAmp_Hz_m(0.)
+        , gyNum(0)
+        , gyMaxAmp_Hz_m(0.)
+        , gyMinAmp_Hz_m(0.)
+        , gxNum(0)
+        , gxMaxAmp_Hz_m(0.)
+        , gxMinAmp_Hz_m(0.)
     {}
 
     void reset()
@@ -49,6 +65,14 @@ struct SeqInfo
         gzNum = 0;
         gzMaxAmp_Hz_m = 0.;
         gzMinAmp_Hz_m = 0.;
+        // GY
+        gyNum = 0;
+        gyMaxAmp_Hz_m = 0.;
+        gyMinAmp_Hz_m = 0.;
+        // GX
+        gxNum = 0;
+        gxMaxAmp_Hz_m = 0.;
+        gxMinAmp_Hz_m = 0.;
     }
 };
 
@@ -117,7 +141,9 @@ signals:
                           const QMap<int, QVector<float>>& shapeLib,
                           const QVector<RfInfo>& rfLib,
                           const RfTimeWaveShapeMap& rfMagShapeLib,
-                          QVector<GradTrapInfo> gzLib
+                          QVector<GradTrapInfo> gzLib,
+                          QVector<GradTrapInfo> gyLib,
+                          QVector<GradTrapInfo> gxLib
                           );
     void finished();
 
@@ -130,6 +156,8 @@ private:
     RfTimeWaveShapeMap                          m_mapRfMagShapeLib;
     QVector<RfInfo>                             m_vecRfLib;
     QVector<GradTrapInfo>                       m_vecGzLib;
+    QVector<GradTrapInfo>                       m_vecGyLib;
+    QVector<GradTrapInfo>                       m_vecGxLib;
 
 private:
     bool LoadPulseqEvents();

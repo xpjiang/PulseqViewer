@@ -96,11 +96,11 @@ private:
 
     // GY
     uint64_t                             m_lGyNum;
-    QVector<GradEvent>                   m_vecGyLib;
+    QVector<GradTrapInfo>                m_vecGyLib;
 
     // GX
     uint64_t                             m_lGxNum;
-    QVector<GradEvent>                   m_vecGxLib;
+    QVector<GradTrapInfo>                m_vecGxLib;
 
     // ADC
     uint64_t                             m_lAdcNum;

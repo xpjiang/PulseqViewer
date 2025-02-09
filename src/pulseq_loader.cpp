@@ -57,7 +57,9 @@ void PulseqLoader::process()
                           m_mapShapeLib,
                           m_vecRfLib,
                           m_mapRfMagShapeLib,
-                          m_vecGzLib
+                          m_vecGzLib,
+                          m_vecGyLib,
+                          m_vecGxLib
                           );
     emit finished();
 }
@@ -121,14 +123,12 @@ bool PulseqLoader::LoadPulseqEvents()
 
         GradAxis gradAxis;
 
-        double gzMaxAmp(0.);
-        double gzMinAmp(0.);
         if (pSeqBlock->isTrapGradient(gradAxis = kGZ))
         {
             const GradEvent& gradEvent = pSeqBlock->GetGradEvent(gradAxis);
             const float& amp = gradEvent.amplitude;
-            gzMaxAmp = std::max(gzMaxAmp, (double)amp);
-            gzMinAmp = std::min(gzMinAmp, (double)amp);
+            m_stSeqInfo.gzMaxAmp_Hz_m = std::max(m_stSeqInfo.gzMaxAmp_Hz_m, (double)amp);
+            m_stSeqInfo.gzMinAmp_Hz_m = std::min(m_stSeqInfo.gzMinAmp_Hz_m, (double)amp);
             int duration_us = gradEvent.rampUpTime + gradEvent.flatTime + gradEvent.rampDownTime;
             double absStartTime_us = dCurrentStartTime_us+gradEvent.delay;
             QVector<double> time{absStartTime_us, absStartTime_us+gradEvent.rampUpTime, absStartTime_us+gradEvent.rampUpTime+gradEvent.flatTime, absStartTime_us+duration_us};
@@ -137,12 +137,40 @@ bool PulseqLoader::LoadPulseqEvents()
             m_vecGzLib.push_back(gradTrapInfo);
         }
 
+        if (pSeqBlock->isTrapGradient(gradAxis = kGY))
+        {
+            const GradEvent& gradEvent = pSeqBlock->GetGradEvent(gradAxis);
+            const float& amp = gradEvent.amplitude;
+            m_stSeqInfo.gyMaxAmp_Hz_m = std::max(m_stSeqInfo.gyMaxAmp_Hz_m, (double)amp);
+            m_stSeqInfo.gyMinAmp_Hz_m = std::min(m_stSeqInfo.gyMinAmp_Hz_m, (double)amp);
+            int duration_us = gradEvent.rampUpTime + gradEvent.flatTime + gradEvent.rampDownTime;
+            double absStartTime_us = dCurrentStartTime_us+gradEvent.delay;
+            QVector<double> time{absStartTime_us, absStartTime_us+gradEvent.rampUpTime, absStartTime_us+gradEvent.rampUpTime+gradEvent.flatTime, absStartTime_us+duration_us};
+            QVector<double> amplitudes{0, amp, amp, 0};
+            GradTrapInfo gradTrapInfo(absStartTime_us, duration_us, time, amplitudes, &gradEvent);
+            m_vecGyLib.push_back(gradTrapInfo);
+        }
+
+        if (pSeqBlock->isTrapGradient(gradAxis = kGX))
+        {
+            const GradEvent& gradEvent = pSeqBlock->GetGradEvent(gradAxis);
+            const float& amp = gradEvent.amplitude;
+            m_stSeqInfo.gxMaxAmp_Hz_m = std::max(m_stSeqInfo.gxMaxAmp_Hz_m, (double)amp);
+            m_stSeqInfo.gxMinAmp_Hz_m = std::min(m_stSeqInfo.gxMinAmp_Hz_m, (double)amp);
+            int duration_us = gradEvent.rampUpTime + gradEvent.flatTime + gradEvent.rampDownTime;
+            double absStartTime_us = dCurrentStartTime_us+gradEvent.delay;
+            QVector<double> time{absStartTime_us, absStartTime_us+gradEvent.rampUpTime, absStartTime_us+gradEvent.rampUpTime+gradEvent.flatTime, absStartTime_us+duration_us};
+            QVector<double> amplitudes{0, amp, amp, 0};
+            GradTrapInfo gradTrapInfo(absStartTime_us, duration_us, time, amplitudes, &gradEvent);
+            m_vecGxLib.push_back(gradTrapInfo);
+        }
+
         dCurrentStartTime_us += pSeqBlock->GetDuration();
         m_stSeqInfo.totalDuration_us += pSeqBlock->GetDuration();
-        m_stSeqInfo.gzMaxAmp_Hz_m = gzMaxAmp;
-        m_stSeqInfo.gzMinAmp_Hz_m = gzMinAmp;
     }
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
     std::cout << m_vecGzLib.size() << " GZ events detetced!\n";
+    std::cout << m_vecGyLib.size() << " GY events detetced!\n";
+    std::cout << m_vecGxLib.size() << " GX events detetced!\n";
     return true;
 }

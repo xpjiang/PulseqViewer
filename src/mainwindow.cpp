@@ -421,7 +421,9 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
                                            const QMap<int, QVector<float>>& shapeLib,
                                            const QVector<RfInfo>& rfLib,
                                            const RfTimeWaveShapeMap& rfMagShapeLib,
-                                           const QVector<GradTrapInfo>& gzLib
+                                           const QVector<GradTrapInfo>& gzLib,
+                                           const QVector<GradTrapInfo>& gyLib,
+                                           const QVector<GradTrapInfo>& gxLib
                                           ) {
                 m_stSeqInfo = seqInfo;
                 m_vecSeqBlocks = blocks;
@@ -429,6 +431,8 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
                 m_vecRfLib = rfLib;
                 m_mapRfMagShapeLib = rfMagShapeLib;
                 m_vecGzLib = gzLib;
+                m_vecGyLib = gyLib;
+                m_vecGxLib = gxLib;
                 DrawWaveform();
                 this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath + QString("(") + m_sPulseqVersion + QString(")"));
                 this->setWindowFilePath(sPulseqFilePath);
@@ -514,9 +518,47 @@ void MainWindow::DrawWaveform()
     }
     const double& gzMaxAmp_Hz_m = m_stSeqInfo.gzMaxAmp_Hz_m;
     const double& gzMinAmp_Hz_m = m_stSeqInfo.gzMinAmp_Hz_m;
-    double maxAbsAmp = std::max(std::abs(gzMaxAmp_Hz_m), std::abs(gzMinAmp_Hz_m));
-    double marginGz = maxAbsAmp * 0.1;
-    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setRange(- maxAbsAmp - marginGz, maxAbsAmp + marginGz);
+    double maxGzAbsAmp = std::max(std::abs(gzMaxAmp_Hz_m), std::abs(gzMinAmp_Hz_m));
+    double marginGz = maxGzAbsAmp * 0.1;
+    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setRange(- maxGzAbsAmp - marginGz, maxGzAbsAmp + marginGz);
+
+    for(const auto& gyInfo : m_vecGyLib)
+    {
+        QCPGraph* gyGraph = ui->customPlot->addGraph(m_mapRect["GY"]->axis(QCPAxis::atBottom),
+                                                     m_mapRect["GY"]->axis(QCPAxis::atLeft));
+        m_vecGzGraphs.append(gyGraph);
+
+        const QVector<double>& time = gyInfo.time;
+        const QVector<double>& amplitudes = gyInfo.amplitude;
+        gyGraph->setData(time, amplitudes);
+
+        gyGraph->setPen(pen);
+        gyGraph->setSelectable(QCP::stWhole);
+    }
+    const double& gyMaxAmp_Hz_m = m_stSeqInfo.gyMaxAmp_Hz_m;
+    const double& gyMinAmp_Hz_m = m_stSeqInfo.gyMinAmp_Hz_m;
+    double maxGyAbsAmp = std::max(std::abs(gyMaxAmp_Hz_m), std::abs(gyMinAmp_Hz_m));
+    double marginGy = maxGyAbsAmp * 0.1;
+    m_mapRect["GY"]->axis(QCPAxis::atLeft)->setRange(- maxGyAbsAmp - marginGy, maxGyAbsAmp + marginGy);
+
+    for(const auto& gxInfo : m_vecGxLib)
+    {
+        QCPGraph* gxGraph = ui->customPlot->addGraph(m_mapRect["GX"]->axis(QCPAxis::atBottom),
+                                                     m_mapRect["GX"]->axis(QCPAxis::atLeft));
+        m_vecGzGraphs.append(gxGraph);
+
+        const QVector<double>& time = gxInfo.time;
+        const QVector<double>& amplitudes = gxInfo.amplitude;
+        gxGraph->setData(time, amplitudes);
+
+        gxGraph->setPen(pen);
+        gxGraph->setSelectable(QCP::stWhole);
+    }
+    const double& gxMaxAmp_Hz_m = m_stSeqInfo.gxMaxAmp_Hz_m;
+    const double& gxMinAmp_Hz_m = m_stSeqInfo.gxMinAmp_Hz_m;
+    double maxGxAbsAmp = std::max(std::abs(gxMaxAmp_Hz_m), std::abs(gxMinAmp_Hz_m));
+    double marginGx = maxGxAbsAmp * 0.1;
+    m_mapRect["GX"]->axis(QCPAxis::atLeft)->setRange(- maxGxAbsAmp - marginGx, maxGxAbsAmp + marginGx);
 
 
     UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
