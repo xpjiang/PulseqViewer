@@ -63,6 +63,7 @@ private:
 
     QLabel                               *m_pVersionLabel;
     QProgressBar                         *m_pProgressBar;
+    QLabel* m_pCoordLabel; // 添加用于显示坐标的 QLabel
 
     QVector<QColor> colors; // same as matlab for plot
 

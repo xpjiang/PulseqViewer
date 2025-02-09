@@ -43,6 +43,9 @@ MainWindow::MainWindow(QWidget *parent)
 	m_pSelectionRect = new QCPItemRect(ui->customPlot);
 	m_pSelectionRect->setVisible(false);
 
+	m_pCoordLabel = new QLabel(this); // 初始化 m_pCoordLabel
+	ui->statusbar->addWidget(m_pCoordLabel); // 将 m_pCoordLabel 添加到状态栏
+
 	// 初始化垂直线
 	//m_pVerticalLine = new QCPItemStraightLine(ui->customPlot);
 	//m_pVerticalLine->setVisible(false);
@@ -63,6 +66,7 @@ MainWindow::~MainWindow()
 	delete ui;
 	SAFE_DELETE(m_pVersionLabel);
 	SAFE_DELETE(m_pProgressBar);
+	SAFE_DELETE(m_pCoordLabel); // 删除 m_pCoordLabel
 }
 
 void MainWindow::Init()
@@ -856,13 +860,14 @@ void MainWindow::onMouseMove(QMouseEvent* event)
 			QCPGraph* graph = rect->graphs().at(i);
 			if (graph)
 			{
-				for (int j = 0; j < graph->dataCount(); ++j)
+				auto it = graph->data()->findBegin(x);
+				if (it != graph->data()->end())
 				{
-					double dist = std::abs(graph->data()->at(j)->key - x);
+					double dist = std::abs(it->key - x);
 					if (dist < minDist)
 					{
 						minDist = dist;
-						closestX = graph->data()->at(j)->key;
+						closestX = it->key;
 						found = true;
 					}
 				}
@@ -872,12 +877,35 @@ void MainWindow::onMouseMove(QMouseEvent* event)
 
 	if (found)
 	{
+		QString coordText = QString("X: %1").arg(closestX);
 		for (int i = 0; i < m_vecVerticalLine.count(); i++)
 		{
 			m_vecVerticalLine[i]->point1->setCoords(closestX, m_vecRects[i]->axis(QCPAxis::atBottom)->range().lower);
 			m_vecVerticalLine[i]->point2->setCoords(closestX, m_vecRects[i]->axis(QCPAxis::atBottom)->range().upper);
 			m_vecVerticalLine[i]->setVisible(true);
+
+			for (int j = 0; j < m_vecRects[i]->graphs().size(); ++j)
+			{
+				QCPGraph* graph = m_vecRects[i]->graphs().at(j);
+				if (graph)
+				{
+					double y = std::numeric_limits<double>::quiet_NaN();
+					for (auto it = graph->data()->begin(); it != graph->data()->end(); ++it)
+					{
+						if (it->key == closestX)
+						{
+							y = it->value;
+							break;
+						}
+					}
+					if (!isnan(y))
+					{
+						coordText += QString(", Y%1: %2").arg(i).arg(y);
+					}
+				}
+			}
 		}
+		m_pCoordLabel->setText(coordText);
 		ui->customPlot->replot();
 	}
 	else
