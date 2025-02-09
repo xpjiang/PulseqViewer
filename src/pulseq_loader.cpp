@@ -61,8 +61,6 @@ bool PulseqLoader::LoadPulseqEvents()
 
     if (m_vecSeqBlock.size() == 0) return true;
     double dCurrentStartTime_us(0.);
-    double dRfMaxAmp(0.);
-    double dRfMinAmp(0.);
     for (const auto& pSeqBlock : m_vecSeqBlock)
     {
         if (pSeqBlock->isRF())
@@ -106,11 +104,9 @@ bool PulseqLoader::LoadPulseqEvents()
                 {
                     const float& amp = vecAmp[index];
                     const float& phase = vecPhase[index];
-                    signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+                    signal = std::abs(std::polar(amp, phase));
                     vecMagnitudes[index+1] = signal;
                     sampleTime += rfInfo.dwell;
-                    dRfMaxAmp = std::max(dRfMaxAmp, signal);
-                    dRfMinAmp = std::min(dRfMinAmp, signal);
                 }
                 vecMagnitudes[ushSamples+1] = 0;
                 m_mapRfMagShapeLib.insert(magAbsShapeID, vecMagnitudes);
@@ -120,8 +116,6 @@ bool PulseqLoader::LoadPulseqEvents()
         m_stSeqInfo.totalDuration_us += pSeqBlock->GetDuration();
     }
     std::cout << "rf mag lib size: " << m_mapRfMagShapeLib.size() << "\n";
-    m_stSeqInfo.rfMaxAmp_Hz = dRfMaxAmp;
-    m_stSeqInfo.rfMinAmp_Hz = dRfMinAmp;
 
     std::cout << m_vecRfLib.size() << " RF events detetced!\n";
     return true;

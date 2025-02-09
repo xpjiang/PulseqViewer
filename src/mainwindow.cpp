@@ -452,6 +452,8 @@ void MainWindow::DrawWaveform()
     pen.setJoinStyle(Qt::MiterJoin);
     pen.setCapStyle(Qt::FlatCap);
 
+    float rfMaxAmp(0.);
+    float rfMinAmp(0.);
 
     for(const auto& rfInfo : m_vecRfLib)
     {
@@ -461,7 +463,7 @@ void MainWindow::DrawWaveform()
         m_vecRfGraphs.append(rfGraph);
 
         QPair<int, int> rfMagShapeID(rfInfo.event->magShape, rfInfo.event->phaseShape);
-        const QVector<double>& amplitudes = m_mapRfMagShapeLib[rfMagShapeID];
+        QVector<double> amplitudes = m_mapRfMagShapeLib[rfMagShapeID];
 
         double sampleTime = rfInfo.startAbsTime_us;
         QVector<double> timePoints(rfInfo.samples+2, 0.);
@@ -473,15 +475,21 @@ void MainWindow::DrawWaveform()
         }
         timePoints.back() = sampleTime;
 
+
+        std::transform(amplitudes.begin(), amplitudes.end(), amplitudes.begin(),
+                       [rfInfo](double x) { return x * rfInfo.event->amplitude; });
+        auto maxIt = std::max_element(amplitudes.begin(), amplitudes.end());
+        auto minIt = std::min_element(amplitudes.begin(), amplitudes.end());
+        rfMaxAmp = std::max(rfMaxAmp, (float)*maxIt);
+        rfMinAmp = std::max(rfMinAmp, (float)*minIt);
+
         rfGraph->setData(timePoints, amplitudes);
 
         rfGraph->setPen(pen);
         rfGraph->setSelectable(QCP::stWhole);
     }
-    const double& dRfMaxAmp = m_stSeqInfo.rfMaxAmp_Hz;
-    double dRfMinAmp = m_stSeqInfo.rfMinAmp_Hz;
-    double margin = (dRfMaxAmp - dRfMinAmp) * 0.1;
-    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(dRfMinAmp - margin, dRfMaxAmp + margin);
+    double margin = (rfMaxAmp - rfMinAmp) * 0.1;
+    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(rfMinAmp - margin, rfMaxAmp + margin);
     UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
 }
 
@@ -490,6 +498,7 @@ void MainWindow::onMousePress(QMouseEvent *event)
     if (m_vecSeqBlocks.size() == 0) return;
     if (event->button() == Qt::LeftButton)
     {
+        ui->customPlot->setInteractions(QCP::Interactions());
         m_bIsSelecting = true;
         m_objSelectStartPos = event->pos();
 
@@ -554,6 +563,7 @@ void MainWindow::onMouseRelease(QMouseEvent *event)
 {
     if (m_vecSeqBlocks.size() == 0) return;
 
+    setInteraction(true);
     if(event->button() == Qt::LeftButton && m_bIsSelecting)
     {
         m_bIsSelecting = false;
