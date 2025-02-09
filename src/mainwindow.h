@@ -36,6 +36,12 @@ private:
     void RestoreViewLayout();
     void UpdateAxisVisibility();
 
+    // Pulseq
+    void ClearPulseqCache();
+    bool LoadPulseqFile(const QString& sPulseqFilePath);
+    bool ClosePulseqFile();
+
+private slots:
     // Slots-File
     void SlotOpenPulseqFile();
     void SlotReOpenPulseqFile();
@@ -49,6 +55,7 @@ private:
 
     // Slot-Analysis
     void SlotExportData();
+    void SlotSaveScreenshot();
 
     // Slot-View
     void SlotResetView();
@@ -62,11 +69,6 @@ private:
     void dropEvent(QDropEvent *event) override;
     void onAxisRangeChanged(const QCPRange &newRange);
     void onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event);
-
-    // Pulseq
-    void ClearPulseqCache();
-    bool LoadPulseqFile(const QString& sPulseqFilePath);
-    bool ClosePulseqFile();
 
 private:
     Ui::MainWindow                       *ui;

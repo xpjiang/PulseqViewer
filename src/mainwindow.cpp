@@ -128,6 +128,8 @@ void MainWindow::InitSlots()
     connect(ui->actionADC, &QAction::triggered, this, &MainWindow::SlotEnableADCAxis);
     connect(ui->actionTrigger, &QAction::triggered, this, &MainWindow::SlotEnableTriggerAxis);
 
+    connect(ui->actionScreenshot, &QAction::triggered, this, &MainWindow::SlotSaveScreenshot);
+
     connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::SlotResetView);
 
     // Analysis
@@ -632,6 +634,13 @@ void MainWindow::SlotExportData()
     {
         QMessageBox::warning(this, "错误", "无法创建文件");
     }
+}
+
+void MainWindow::SlotSaveScreenshot()
+{
+    QPixmap pixmap(ui->customPlot->width(), ui->customPlot->height());
+    pixmap.setDevicePixelRatio(2.0);
+    ui->customPlot->savePng("D:\\pv.png");
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
