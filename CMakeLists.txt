@@ -51,7 +51,7 @@ source_group("Form" FILES ${UI_LIST})
 file(GLOB SRC_LIST "${PROJECT_ROOT}/src/*.cpp")
 file(GLOB HEADER_LIST "${PROJECT_ROOT}/src/*.h")
 include_directories(${PULSEQ_DIR} ${QCUSTOM_PLOT_DIR})
-# add_definitions(-DQCUSTOMPLOT_USE_OPENGL)
+add_definitions(-DQCUSTOMPLOT_USE_OPENGL)
 add_executable(${PROJECT_NAME} ${SRC_LIST} ${HEADER_LIST} ${UI_LIST} ${EXTERNAL_LIST})
 
 # Link Qt6
