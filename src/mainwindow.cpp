@@ -84,6 +84,8 @@ void MainWindow::InitSequenceFigure()
         index = m_listAxis.indexOf(axis);
         m_mapRect[axis] = new QCPAxisRect(ui->customPlot);
         m_mapRect[axis]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+        m_mapRect[axis]->axis(QCPAxis::atLeft)->setNumberFormat("g");
+        // m_mapRect[axis]->axis(QCPAxis::atLeft)->setNumberPrecision(2);
         ui->customPlot->plotLayout()->addElement(index, 0, m_mapRect[axis]);
     }
 
@@ -339,15 +341,21 @@ void MainWindow::ClearPulseqCache()
     {
         ui->customPlot->clearGraphs();
         m_vecRfGraphs.clear();
-        ui->customPlot->yAxis->setRange(0, 5);
-        ui->customPlot->xAxis->setRange(0, 100);
+        m_vecGzGraphs.clear();
+        for (auto& axis : m_listAxis)
+        {
+            m_mapRect[axis]->axis(QCPAxis::atLeft)->setRange(0, 5);
+            m_mapRect[axis]->axis(QCPAxis::atBottom)->setRange(0, 100);
+        }
         ui->customPlot->replot();
     }
+
     m_sPulseqVersion = "";
     m_stSeqInfo.reset();
 
     m_mapShapeLib.clear();
     m_vecRfLib.clear();
+    m_vecGzLib.clear();
     if (nullptr != m_spPulseqSeq.get())
     {
         m_spPulseqSeq->reset();
@@ -495,7 +503,6 @@ void MainWindow::DrawWaveform()
     {
         QCPGraph* gzGraph = ui->customPlot->addGraph(m_mapRect["GZ"]->axis(QCPAxis::atBottom),
                                                      m_mapRect["GZ"]->axis(QCPAxis::atLeft));
-        // gzGraph->setLineStyle(QCPGraph::lsStepLeft);
         m_vecGzGraphs.append(gzGraph);
 
         const QVector<double>& time = gzInfo.time;
@@ -509,7 +516,7 @@ void MainWindow::DrawWaveform()
     const double& gzMinAmp_Hz_m = m_stSeqInfo.gzMinAmp_Hz_m;
     double maxAbsAmp = std::max(std::abs(gzMaxAmp_Hz_m), std::abs(gzMinAmp_Hz_m));
     double marginGz = maxAbsAmp * 0.1;
-    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setRange( - maxAbsAmp - marginGz, maxAbsAmp + marginGz);
+    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setRange(- maxAbsAmp - marginGz, maxAbsAmp + marginGz);
 
 
     UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
