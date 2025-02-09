@@ -710,7 +710,9 @@ class ExternalSequence
 	/**
 	 * @brief Return number of sequence blocks
 	 */
-	int  GetNumberOfBlocks(void);
+	size_t  GetNumberOfBlocks(void);
+
+	double GetGradientRasterTime_us();
 
 	/**
 	 * @brief Construct a sequence block from the library events
@@ -910,7 +912,7 @@ class ExternalSequence
 // * Inline functions                                                   *
 // * ------------------------------------------------------------------ *
 
-inline int ExternalSequence::GetNumberOfBlocks(void){return m_blocks.size();}
+inline size_t ExternalSequence::GetNumberOfBlocks(void){return m_blocks.size();}
 inline std::vector<double>	ExternalSequence::GetDefinition(std::string key){
 	if (m_definitions.count(key)>0)
 		return m_definitions[key];
@@ -931,5 +933,7 @@ inline void ExternalSequence::SetPrintFunction(PrintFunPtr fun) { print_fun=fun;
 inline bool ExternalSequence::isSigned() { return m_bSignatureDefined; }
 inline std::string ExternalSequence::getSignature() { return m_strSignature; }
 inline std::string ExternalSequence::getSignatureType() { return m_strSignatureType; }
+
+inline double ExternalSequence::GetGradientRasterTime_us() { return m_dGradientRasterTime_us; }
 
 #endif	//_EXTERNAL_SEQUENCE_H_

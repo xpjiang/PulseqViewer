@@ -2,10 +2,10 @@
 
 #include <QApplication>
 #include <QStyleFactory>
-
+//#pragma comment(linker, "/subsystem:windows /entry:mainCRTStartup")
 int main(int argc, char *argv[])
 {
-     QApplication::setStyle(QStyleFactory::create("Fusion"));
+    QApplication::setStyle(QStyleFactory::create("Fusion"));
 
     QApplication app(argc, argv);
     MainWindow window;

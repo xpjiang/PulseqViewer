@@ -32,5 +32,6 @@
 *.app
 
 build*/
-.vs/
-*.seq
+.vs
+/CMakePresets.json
+/CMakeUserPresets.json

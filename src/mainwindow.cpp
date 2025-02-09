@@ -2,921 +2,669 @@
 #include "ui_mainwindow.h"
 
 #include <iostream>
-
+#include <complex>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
-    , m_sPulseqFilePath("")
-    , m_sPulseqFilePathCache("")
-    , m_spPulseqSeq(std::make_shared<ExternalSequence>())
-    , m_sPulseqVersion("")
-    , m_bIsSelecting(false)
-    , m_bIsDragging(false)
-    , m_dDragStartRange(0.)
-    , m_listAxis({"RF", "GZ", "GY", "GX", "ADC"})
-    , m_pSelectedGraph(nullptr)
+	: QMainWindow(parent)
+	, ui(new Ui::MainWindow)
+	, m_sPulseqFilePath("")
+	, m_sPulseqFilePathCache("")
+	, m_spPulseqSeq(std::make_shared<ExternalSequence>())
+	, m_lRfNum(0)
+	, m_bIsSelecting(false)
+	, m_dTotalDuration_us(0.)
+	, m_dDragStartRange(0.)
 {
-    ui->setupUi(this);
-    setAcceptDrops(true);
-    this->setWindowTitle(BASIC_WIN_TITLE);
-    Init();
+	ui->setupUi(this);
+	setAcceptDrops(true);
+	Init();
 
-    m_mapAxisAction = {
-        {"RF", ui->actionRF},
-        {"GZ", ui->actionGZ},
-        {"GY", ui->actionGY},
-        {"GX", ui->actionGX},
-        {"ADC", ui->actionADC},
-        };
+	m_listRecentPulseqFilePaths.resize(10);
 
-    m_listRecentPulseqFilePaths.resize(10);
-
-    m_pSelectionRect = new QCPItemRect(ui->customPlot);
-    m_pSelectionRect->setVisible(false);
-    m_pSelectionRect->setBrush(QBrush(QColor(128, 128, 128, 128)));
-    m_pSelectionRect->setPen(QPen(Qt::black, 1));
-
-
+	m_pSelectionRect = new QCPItemRect(ui->customPlot);
+	m_pSelectionRect->setVisible(false);
 }
 
 MainWindow::~MainWindow()
 {
-    ClearPulseqCache();
-    delete ui;
-    SAFE_DELETE(m_pVersionLabel);
-    SAFE_DELETE(m_pProgressBar);
+	ClearPulseqCache();
+	delete ui;
+	SAFE_DELETE(m_pVersionLabel);
+	SAFE_DELETE(m_pProgressBar);
 }
 
 void MainWindow::Init()
 {
-    InitStatusBar();
-    InitSequenceFigure();
-    InitSlots();
-}
-
-void MainWindow::InitStatusBar()
-{
-    m_pVersionLabel= new QLabel(this);
-    ui->statusbar->addWidget(m_pVersionLabel);
-
-    m_pProgressBar = new QProgressBar(this);
-    m_pProgressBar->setMaximumWidth(200);
-    m_pProgressBar->setMinimumWidth(200);
-    m_pProgressBar->hide();
-    m_pProgressBar->setRange(0, 100);
-    m_pProgressBar->setValue(0);
-    ui->statusbar->addWidget(m_pProgressBar);
-}
-
-void MainWindow::InitSequenceFigure()
-{
-    QScreen *screen = QGuiApplication::primaryScreen();
-    qreal devicePixelRatio = screen->devicePixelRatio();
-
-    connect(screen, &QScreen::logicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
-    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
-
-    ui->customPlot->plotLayout()->clear();
-
-    // ui->customPlot->setNotAntialiasedElements(QCP::aeAll);  // 关闭抗锯齿
-    ui->customPlot->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);
-    ui->customPlot->setNoAntialiasingOnDrag(true);
-    ui->customPlot->setBufferDevicePixelRatio(devicePixelRatio);
-    ui->customPlot->setAntialiasedElements(QCP::aeAll);
-    // ui->customPlot->setOpenGl(true);
-
-    const bool& enableOpenGL = ui->customPlot->openGl();
-    if (!enableOpenGL)
-    {
-        QMessageBox::information(this, "Fail", "OpenGL init failed!");
-        // return;
-    }
-    setInteraction(false);
-
-    uint8_t index(0);
-    for (auto& axis : m_listAxis)
-    {
-        index = m_listAxis.indexOf(axis);
-        m_mapRect[axis] = new QCPAxisRect(ui->customPlot);
-        m_mapRect[axis]->axis(QCPAxis::atBottom)->setLabel("Time (us)");
-        m_mapRect[axis]->axis(QCPAxis::atLeft)->setNumberFormat("g");
-        ui->customPlot->plotLayout()->addElement(index, 0, m_mapRect[axis]);
-    }
-
-    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setLabel("RF (Hz)");
-    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setLabel("GZ (Hz/m)");
-    m_mapRect["GY"]->axis(QCPAxis::atLeft)->setLabel("GY (Hz/m)");
-    m_mapRect["GX"]->axis(QCPAxis::atLeft)->setLabel("GX (Hz/m)");
-    m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setLabel("ADC");
-
-    QSharedPointer<QCPAxisTickerText> ticker(new QCPAxisTickerText);
-    ticker->addTick(0, "0");
-    ticker->addTick(1, "1");
-    m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setTicker(ticker);
-
-    QMargins margins(70, 10, 10, 10);
-    QFont labelFont;
-    labelFont.setWeight(QFont::DemiBold);
-    foreach (auto& rect, m_mapRect)
-    {
-        rect->setMinimumMargins(margins);
-        rect->setRangeDrag(Qt::Horizontal);
-        rect->setRangeZoom(Qt::Horizontal);
-        rect->setupFullAxesBox(true);
-
-        rect->axis(QCPAxis::atLeft)->setLabelPadding(10);
-        rect->axis(QCPAxis::atLeft)->setLabelFont(labelFont);
-    }
-
-    // Hide all time axis but the last one
-    UpdateAxisVisibility();
-
-    m_mapRect["ADC"]->axis(QCPAxis::atLeft)->setRange(0, 1.3);
-    ui->customPlot->replot();
+	InitSlots();
+	InitStatusBar();
+	InitSequenceFigure();
 }
 
 void MainWindow::InitSlots()
 {
-    connect(windowHandle(), &QWindow::screenChanged, this, &MainWindow::windowScreenChanged);
+	// File
+	connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::OpenPulseqFile);
+	connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::ReOpenPulseqFile);
+	connect(ui->actionCloseFile, &QAction::triggered, this, &MainWindow::ClosePulseqFile);
 
-    // File
-    connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::SlotOpenPulseqFile);
-    connect(ui->actionReopen, &QAction::triggered, this, &MainWindow::SlotReOpenPulseqFile);
-    connect(ui->actionCloseFile, &QAction::triggered, this, &MainWindow::ClosePulseqFile);
+	// View
+	connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::ResetView);
 
-    // View
-    connect(ui->actionRF, &QAction::triggered, this, &MainWindow::SlotEnableRFAxis);
-    connect(ui->actionGZ, &QAction::triggered, this, &MainWindow::SlotEnableGZAxis);
-    connect(ui->actionGY, &QAction::triggered, this, &MainWindow::SlotEnableGYAxis);
-    connect(ui->actionGX, &QAction::triggered, this, &MainWindow::SlotEnableGXAxis);
-    connect(ui->actionADC, &QAction::triggered, this, &MainWindow::SlotEnableADCAxis);
-    connect(ui->actionTrigger, &QAction::triggered, this, &MainWindow::SlotEnableTriggerAxis);
-
-    connect(ui->actionScreenshot, &QAction::triggered, this, &MainWindow::SlotSaveScreenshot);
-
-    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::SlotResetView);
-
-    // Analysis
-    connect(ui->actionExportData, &QAction::triggered, this, &MainWindow::SlotExportData);
-
-    // Interaction
-    connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
-    connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
-    connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
-    connect(ui->customPlot, &QCustomPlot::plottableClick, this, &MainWindow::onPlottableClick);
-
-
-    foreach (auto& rect1, m_mapRect)
-    {
-        if (rect1)
-        {
-            connect(rect1->axis(QCPAxis::atBottom),
-                    QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
-                    this, &MainWindow::onAxisRangeChanged);
-        }
-
-        foreach (auto& rect2, m_mapRect)
-        {
-            if (rect1 != rect2)
-            {
-                connect(rect1->axis(QCPAxis::atBottom), QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
-                        rect2->axis(QCPAxis::atBottom), QOverload<const QCPRange&>::of(&QCPAxis::setRange));
-            }
-        }
-    }
+	// Interaction
+	//connect(ui->customPlot, &QCustomPlot::mousePress, this, &MainWindow::onMousePress);
+	//connect(ui->customPlot, &QCustomPlot::mouseMove, this, &MainWindow::onMouseMove);
+	//connect(ui->customPlot, &QCustomPlot::mouseRelease, this, &MainWindow::onMouseRelease);
 }
 
-void MainWindow::UpdatePlotRange(const double& x1, const double& x2)
+void MainWindow::InitStatusBar()
 {
-    ui->customPlot->xAxis->setRange(x1, x2);
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
+	m_pVersionLabel= new QLabel(this);
+	ui->statusbar->addWidget(m_pVersionLabel);
+
+	m_pProgressBar = new QProgressBar(this);
+	m_pProgressBar->setMaximumWidth(200);
+	m_pProgressBar->setMinimumWidth(200);
+	m_pProgressBar->hide();
+	m_pProgressBar->setRange(0, 100);
+	m_pProgressBar->setValue(0);
+	ui->statusbar->addWidget(m_pProgressBar);
 }
 
-void MainWindow::RestoreViewLayout()
+void MainWindow::InitSequenceFigure()
 {
-    foreach (auto& rect, m_mapRect)
-    {
-        ui->customPlot->plotLayout()->take(rect);
-    }
+	ui->customPlot->clearGraphs();
+	ui->customPlot->plotLayout()->clear();
 
-    uint16_t index(0);
-    for (auto& axis : m_listAxis)
-    {
-        if (m_mapAxisAction[axis]->isChecked())
-        {
-            ui->customPlot->plotLayout()->addElement(index, 0, m_mapRect[axis]);
-            index += 1;
-        }
-    }
+	ui->customPlot->setAntialiasedElements(QCP::aeAll);
+	ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
+
+
+	m_pADCLabelsRect = new QCPAxisRect(ui->customPlot);
+	m_pRfMagRect = new QCPAxisRect(ui->customPlot);
+	m_pRfADCPhaseRect = new QCPAxisRect(ui->customPlot);
+	m_pGxRect = new QCPAxisRect(ui->customPlot);
+	m_pGyRect = new QCPAxisRect(ui->customPlot);
+	m_pGzRect = new QCPAxisRect(ui->customPlot);
+
+	m_vecRects.append(m_pADCLabelsRect);
+	m_vecRects.append(m_pRfMagRect);
+	m_vecRects.append(m_pRfADCPhaseRect);
+	m_vecRects.append(m_pGxRect);
+	m_vecRects.append(m_pGyRect);
+	m_vecRects.append(m_pGzRect);
+
+	// Create a margin group for aligning the left margins of all axis rects
+	auto m_pMarginGroup = new QCPMarginGroup(ui->customPlot);
+	for(int i = 0; i < m_vecRects.count(); i++)
+	{
+		ui->customPlot->plotLayout()->addElement(i, 0, m_vecRects[i]);
+		m_vecRects[i]->axis(QCPAxis::atLeft)->setRange(0, 10);
+		m_vecRects[i]->axis(QCPAxis::atBottom)->setRange(0, 100);
+
+		// Set the left margin of each axis rect to the margin group
+		m_vecRects[i]->setMarginGroup(QCP::msLeft, m_pMarginGroup);
+
+		// Set margins and spacing to reduce the gap between graphs
+		m_vecRects[i]->setMargins(QMargins(0, 0, 0, 2));
+		m_vecRects[i]->setMinimumMargins(QMargins(0, 0, 0, 0));
+		m_vecRects[i]->setAutoMargins(QCP::msLeft);
+	}
+
+	m_vecRects[5]->setAutoMargins(QCP::msBottom| QCP::msLeft);
+	
+	// Hide x-axis tick labels for m_vecRects[0] to m_vecRects[4]
+	for (int i = 0; i < 5; i++)
+	{
+		m_vecRects[i]->axis(QCPAxis::atBottom)->setTickLabels(false);
+	}
+
+	// // 只允许水平方向拖拽
+	// m_pRfRect->setRangeDrag(Qt::Horizontal);    // 设置RF区域只能水平拖拽
+	// m_pGzRect->setRangeDrag(Qt::Horizontal);    // 对每个区域都设置
+	// m_pGyRect->setRangeDrag(Qt::Horizontal);
+	// m_pGxRect->setRangeDrag(Qt::Horizontal);
+	// m_pAdcRect->setRangeDrag(Qt::Horizontal);
+
+	// // 同样，对于缩放也可以只允许水平方向
+	// m_pRfRect->setRangeZoom(Qt::Horizontal);    // 设置只能水平缩放
+	// m_pGzRect->setRangeZoom(Qt::Horizontal);
+	// m_pGyRect->setRangeZoom(Qt::Horizontal);
+	// m_pGxRect->setRangeZoom(Qt::Horizontal);
+	// m_pAdcRect->setRangeZoom(Qt::Horizontal);
+
+	m_pRfMagRect->setRangeZoom(Qt::Horizontal);
+	m_pRfADCPhaseRect->setRangeZoom(Qt::Horizontal);
+
+	//m_pRfRect->setupFullAxesBox(true);
+	m_pADCLabelsRect->axis(QCPAxis::atLeft)->setLabel("ADC/labels");
+	m_pRfMagRect->axis(QCPAxis::atLeft)->setLabel("RF mag(Hz)");
+	m_pRfADCPhaseRect->axis(QCPAxis::atLeft)->setLabel("RF/ADC ph(rad)");
+
+	m_pGxRect->axis(QCPAxis::atLeft)->setLabel("GX (Hz/m)");
+	m_pGyRect->axis(QCPAxis::atLeft)->setLabel("GY (Hz/m)");
+	m_pGzRect->axis(QCPAxis::atLeft)->setLabel("GZ (Hz/m)");
+
+	// share the same time axis
+	//m_pRfRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+	//m_pGzRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+	//m_pGyRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+	//m_pGxRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+	m_pGzRect->axis(QCPAxis::atBottom)->setLabel("Time (us)");
+
+	// Hide all time axis but the last one
+	//m_pRfRect->axis(QCPAxis::atBottom)->setVisible(false);
+	//m_pGzRect->axis(QCPAxis::atBottom)->setVisible(false);
+	//m_pGyRect->axis(QCPAxis::atBottom)->setVisible(false);
+	//m_pGxRect->axis(QCPAxis::atBottom)->setVisible(false);
+	for (int i = 0; i < m_vecRects.count(); i++)
+	{
+		//m_vecGraphs.append(ui->customPlot->addGraph(m_vecRects[i]->axis(QCPAxis::atBottom), m_vecRects[i]->axis(QCPAxis::atLeft)));
+
+		// Connect the rangeChanged signal of each x-axis to the synchronizeXAxes slot
+		connect(m_vecRects[i]->axis(QCPAxis::atBottom), SIGNAL(rangeChanged(QCPRange)), this, SLOT(synchronizeXAxes(QCPRange)));
+	}
+	
+	
+	
+	// plot RF
+	// m_vecRects[1]
+	// 模拟多组RF的显示，
+	// t:每组RF有对应的block start time(依据之前的block算出来)，rf的delay，block的rfDwellTime_us
+	// y:block的rfAmplitude[]和rf的amplitude
+	long t0 = 1;
+
 }
 
-void MainWindow::UpdateAxisVisibility()
+void MainWindow::synchronizeXAxes(const QCPRange& newRange)
 {
-    bool bAxisVisible(false);
-    for(auto it = m_listAxis.rbegin(); it != m_listAxis.rend(); ++it)
-    {
-        QString& axis = *it;
-        bool bIsRectVis(m_mapRect[axis]->visible());
-        if (bIsRectVis && !bAxisVisible)
-        {
-            bAxisVisible = true;
-            m_mapRect[axis]->axis(QCPAxis::atBottom)->setVisible(bAxisVisible);
-        }
-        else
-        {
-            m_mapRect[axis]->axis(QCPAxis::atBottom)->setVisible(false);
-        }
-    }
+	for(int i = 0; i < m_vecRects.count(); i++)
+	{
+		// Block signals to prevent recursive updates
+		m_vecRects[i]->axis(QCPAxis::atBottom)->blockSignals(true);
+	}
+
+	// Update the range of all x-axes
+	for (int i = 0; i < m_vecRects.count(); i++)
+	{
+		m_vecRects[i]->axis(QCPAxis::atBottom)->setRange(newRange);
+	}
+
+	// Unblock signals
+	for (int i = 0; i < m_vecRects.count(); i++)
+	{
+		m_vecRects[i]->axis(QCPAxis::atBottom)->blockSignals(false);
+	}
+	
+	// Replot the custom plot
+	ui->customPlot->replot();
 }
 
-void MainWindow::SlotOpenPulseqFile()
+void MainWindow::OpenPulseqFile()
 {
-    m_sPulseqFilePath = QFileDialog::getOpenFileName(
-        this,
-        "Selec a Pulseq File",                           // Dialog title
-        QDir::currentPath(),                    // Default open folder
-        "Text Files (*.seq);;All Files (*)"  // File filter
-        );
+	m_sPulseqFilePath = QFileDialog::getOpenFileName(
+		this,
+		"Selec a Pulseq File",                           // Dialog title
+		QDir::currentPath(),                    // Default open folder
+		"Text Files (*.seq);;All Files (*)"  // File filter
+		);
 
-    if (!m_sPulseqFilePath.isEmpty())
-    {
-        if (!LoadPulseqFile(m_sPulseqFilePath))
-        {
-            m_sPulseqFilePath.clear();
-            std::cout << "LoadPulseqFile failed!\n";
-        }
-        m_sPulseqFilePathCache = m_sPulseqFilePath;
-    }
+	if (!m_sPulseqFilePath.isEmpty())
+	{
+		if (!LoadPulseqFile(m_sPulseqFilePath))
+		{
+			m_sPulseqFilePath.clear();
+			std::cout << "LoadPulseqFile failed!\n";
+		}
+		m_sPulseqFilePathCache = m_sPulseqFilePath;
+	}
 }
 
-void MainWindow::SlotReOpenPulseqFile()
+void MainWindow::ReOpenPulseqFile()
 {
-    if (m_sPulseqFilePathCache.size() > 0)
-    {
-        ClearPulseqCache();
-        LoadPulseqFile(m_sPulseqFilePathCache);
-    }
+	if (m_sPulseqFilePathCache.size() > 0)
+	{
+		ClearPulseqCache();
+		LoadPulseqFile(m_sPulseqFilePathCache);
+	}
 }
 
-void MainWindow::SlotEnableRFAxis()
+void MainWindow::ResetView()
 {
-    const bool& isChecked = ui->actionRF->isChecked();
-    m_mapRect["RF"]->setVisible(isChecked);
-    if (isChecked)
-    {
-        RestoreViewLayout();
-    }
-    else
-    {
-        ui->customPlot->plotLayout()->take(m_mapRect["RF"]);
-    }
-    UpdateAxisVisibility();
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void MainWindow::SlotEnableGZAxis()
-{
-    const bool& isChecked = ui->actionGZ->isChecked();
-    m_mapRect["GZ"]->setVisible(isChecked);
-    if (isChecked)
-    {
-        RestoreViewLayout();
-    }
-    else
-    {
-        ui->customPlot->plotLayout()->take(m_mapRect["GZ"]);
-    }
-    UpdateAxisVisibility();
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void MainWindow::SlotEnableGYAxis()
-{
-    const bool& isChecked = ui->actionGY->isChecked();
-    m_mapRect["GY"]->setVisible(isChecked);
-    if (isChecked)
-    {
-        RestoreViewLayout();
-    }
-    else
-    {
-        ui->customPlot->plotLayout()->take(m_mapRect["GY"]);
-    }
-    UpdateAxisVisibility();
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void MainWindow::SlotEnableGXAxis()
-{
-    const bool& isChecked = ui->actionGX->isChecked();
-    m_mapRect["GX"]->setVisible(isChecked);
-    if (isChecked)
-    {
-        RestoreViewLayout();
-    }
-    else
-    {
-        ui->customPlot->plotLayout()->take(m_mapRect["GX"]);
-    }
-    UpdateAxisVisibility();
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void MainWindow::SlotEnableADCAxis()
-{
-    const bool& isChecked = ui->actionADC->isChecked();
-    m_mapRect["ADC"]->setVisible(isChecked);
-    if (isChecked)
-    {
-        RestoreViewLayout();
-    }
-    else
-    {
-        ui->customPlot->plotLayout()->take(m_mapRect["ADC"]);
-    }
-    UpdateAxisVisibility();
-    ui->customPlot->plotLayout()->simplify();
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void MainWindow::SlotEnableTriggerAxis()
-{
-}
-
-void MainWindow::SlotResetView()
-{
-    if (m_sPulseqFilePathCache.isEmpty()) return;
-    UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
+	DrawRFWaveform(0, -1);
 }
 
 void MainWindow::ClearPulseqCache()
 {
-    this->setEnabled(false);
-    setInteraction(false);
-    m_pProgressBar->hide();
-    m_pSelectedGraph = nullptr;
-    if (NULL != ui->customPlot)
-    {
-        ui->customPlot->clearGraphs();
-        m_vecRfGraphs.clear();
-        m_vecGzGraphs.clear();
-        m_vecGyGraphs.clear();
-        m_vecGxGraphs.clear();
-        m_vecAdcGraphs.clear();
-        for (auto& axis : m_listAxis)
-        {
-            if (axis == "ADC")
-            {
-                m_mapRect[axis]->axis(QCPAxis::atLeft)->setRange(0, 1.3);
-            }
-            else
-            {
-                m_mapRect[axis]->axis(QCPAxis::atLeft)->setRange(0, 5);
-            }
-            m_mapRect[axis]->axis(QCPAxis::atBottom)->setRange(0, 100);
-        }
-        ui->customPlot->replot();
-    }
+	m_pVersionLabel->setText("");
+	m_pVersionLabel->setVisible(false);
+	m_pProgressBar->hide();
 
-    m_sPulseqVersion = "";
-    m_stSeqInfo.reset();
+	if (NULL != ui->customPlot)  // 先检查 customPlot 是否有效
+	{
+		ui->customPlot->clearGraphs();
+		ui->customPlot->replot();
+	}
 
-    m_mapShapeLib.clear();
-    m_vecRfLib.clear();
-    m_vecGzLib.clear();
-    if (nullptr != m_spPulseqSeq.get())
-    {
-        m_spPulseqSeq->reset();
-        m_spPulseqSeq.reset(new ExternalSequence);
-        for (uint64_t ushBlockIndex=0; ushBlockIndex < m_vecSeqBlocks.size(); ushBlockIndex++)
-        {
-            SAFE_DELETE(m_vecSeqBlocks[ushBlockIndex]);
-        }
-        m_vecSeqBlocks.clear();
-        std::cout << m_sPulseqFilePath.toStdString() << " Closed\n";
-    }
-    this->setWindowFilePath("");
-    this->setWindowTitle(QString(BASIC_WIN_TITLE));
-    this->setEnabled(true);
+	m_dTotalDuration_us = 0.;
+	m_lRfNum = 0;
+
+	m_mapShapeLib.clear();
+	m_vecRfLib.clear();
+	if (nullptr != m_spPulseqSeq.get())
+	{
+		m_spPulseqSeq->reset();
+		m_spPulseqSeq.reset(new ExternalSequence);
+		for (uint16_t ushBlockIndex=0; ushBlockIndex < m_vecSeqBlocks.size(); ushBlockIndex++)
+		{
+			SAFE_DELETE(m_vecSeqBlocks[ushBlockIndex]);
+		}
+		m_vecSeqBlocks.clear();
+		std::cout << m_sPulseqFilePath.toStdString() << " Closed\n";
+	}
+	this->setWindowFilePath("");
 }
 
 bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 {
-    this->setEnabled(false);
-    setInteraction(false);
-    ClearPulseqCache();
-    m_sPulseqVersion = "";
-    m_pVersionLabel->setVisible(true);
-    m_pVersionLabel->setText("Loading...");
-    m_pProgressBar->setValue(0);
+	this->setEnabled(false);
+	//ClearPulseqCache();
+	if (!m_spPulseqSeq->load(sPulseqFilePath.toStdString()))
+	{
+		this->setEnabled(false);
+		std::stringstream sLog;
+		sLog << "Load " << sPulseqFilePath.toStdString() << " failed!";
+		std::cout << sLog.str() << "\n";
+		QMessageBox::critical(this, "File Error", sLog.str().c_str());
+		this->setEnabled(true);
+		return false;
+	}
+	this->setWindowFilePath(sPulseqFilePath);
 
-    QThread* thread = new QThread(this);
-    PulseqLoader* loader = new PulseqLoader;
-    loader->moveToThread(thread);
-    loader->SetPulseqFile(sPulseqFilePath);
-    loader->SetSequence(m_spPulseqSeq);
+	const int& shVersion = m_spPulseqSeq->GetVersion();
+	m_pVersionLabel->setVisible(true);
+	const int& shVersionMajor = shVersion / 1000000L;
+	const int& shVersionMinor = (shVersion / 1000L) % 1000L;
+	const int& shVersionRevision = shVersion % 1000L;
+	QString sVersion = QString::number(shVersionMajor) + "." + QString::number(shVersionMinor) + "." + QString::number(shVersionRevision);
+	m_pVersionLabel->setText("Pulseq Version: v" + sVersion);
 
-    connect(loader, &PulseqLoader::processingStarted,
-            this, [this]() {
-                m_pProgressBar->show();
-            });
-    connect(thread, &QThread::started, loader, &PulseqLoader::process);
-    connect(loader, &PulseqLoader::finished, thread, &QThread::quit);
-    connect(loader, &PulseqLoader::finished, loader, &PulseqLoader::deleteLater);
-    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
+	const int64_t& lSeqBlockNum = m_spPulseqSeq->GetNumberOfBlocks();
+	std::cout << lSeqBlockNum << " blocks detected!\n";
+	m_vecSeqBlocks.resize(lSeqBlockNum);
+	m_pProgressBar->show();
+	int64_t progress(0);
+	for (int64_t ushBlockIndex=0; ushBlockIndex < lSeqBlockNum; ushBlockIndex++)
+	{
+		m_vecSeqBlocks[ushBlockIndex] = m_spPulseqSeq->GetBlock(ushBlockIndex);
+		if (!m_spPulseqSeq->decodeBlock(m_vecSeqBlocks[ushBlockIndex]))
+		{
+			std::stringstream sLog;
+			sLog << "Decode SeqBlock failed, block index: " << ushBlockIndex;
+			QMessageBox::critical(this, "File Error", sLog.str().c_str());
+			ClearPulseqCache();
+			return false;
+		}
+		if (m_vecSeqBlocks[ushBlockIndex]->isRF()) { m_lRfNum += 1; }
 
-    connect(loader, &PulseqLoader::errorOccurred, this, [this](const QString& error) {
-        QMessageBox::critical(this, "File Error", error);
-        ClearPulseqCache();
-        this->setEnabled(true);
-    });
+		progress = ushBlockIndex * 100 / lSeqBlockNum;
+		m_pProgressBar->setValue(progress);
+	}
 
-    connect(loader, &PulseqLoader::progressUpdated, m_pProgressBar, &QProgressBar::setValue);
 
-    connect(loader, &PulseqLoader::versionLoaded, this, [this](int version) {
-        const int shVersionMajor = version / 1000000L;
-        const int shVersionMinor = (version / 1000L) % 1000L;
-        const int shVersionRevision = version % 1000L;
-        m_sPulseqVersion = QString::number(shVersionMajor) + "." +
-                   QString::number(shVersionMinor) + "." +
-                   QString::number(shVersionRevision);
-        m_pVersionLabel->setText("Pulseq Version: v" + m_sPulseqVersion);
-    });
+	m_vecRfLib.reserve(m_lRfNum);
 
-    connect(loader, &PulseqLoader::loadingCompleted,
-            this, [this, sPulseqFilePath](const SeqInfo& seqInfo,
-                                        const QVector<SeqBlock*>& blocks,
-                                        const QMap<int, QVector<float>>& shapeLib,
-                                        const QVector<RfInfo>& rfLib,
-                                        const RfTimeWaveShapeMap& rfMagShapeLib,
-                                        const QVector<GradTrapInfo>& gzLib,
-                                        const QVector<GradTrapInfo>& gyLib,
-                                        const QVector<GradTrapInfo>& gxLib,
-                                        const QVector<AdcInfo>& adcLib
-                                        ) {
-                m_stSeqInfo = seqInfo;
-                m_vecSeqBlocks = blocks;
-                m_mapShapeLib = shapeLib;
-                m_vecRfLib = rfLib;
-                m_mapRfMagShapeLib = rfMagShapeLib;
-                m_vecGzLib = gzLib;
-                m_vecGyLib = gyLib;
-                m_vecGxLib = gxLib;
-                m_vecAdcLib = adcLib;
-                DrawWaveform();
-                this->setWindowTitle(QString(BASIC_WIN_TITLE) + QString(": ") + sPulseqFilePath + QString("(") + m_sPulseqVersion + QString(")"));
-                this->setWindowFilePath(sPulseqFilePath);
-                m_pProgressBar->setValue(100);
-                this->setEnabled(true);
-                setInteraction(true);
-            });
+	if (!LoadPulseqEvents())
+	{
+		std::cout << "LoadPulseqEvents failed!\n";
+		QMessageBox::critical(this, "Pulseq Events Error", "LoadPulseqEvents failed!");
+		return false;
+	}
 
-    thread->start();
-    return true;
+	m_pProgressBar->setValue(100);
+	this->setEnabled(true);
+	return true;
 }
 
 bool MainWindow::ClosePulseqFile()
 {
-    m_pVersionLabel->setVisible(true);
-    m_pVersionLabel->setText("Closing file...");
-    ClearPulseqCache();
-    m_pVersionLabel->setVisible(false);
-    m_pVersionLabel->setText("");
-    return true;
+	ClearPulseqCache();
+
+	return true;
 }
 
-void MainWindow::DrawWaveform()
+bool MainWindow::LoadPulseqEvents()
 {
-    if (m_vecSeqBlocks.size() == 0) return;
-    if (m_vecRfLib.size() == 0) return;
+	if (m_vecSeqBlocks.size() == 0) return true;
+	m_dTotalDuration_us = 0.;
+	double dCurrentStartTime_us(0.);
+	for (const auto& pSeqBlock : m_vecSeqBlocks)
+	{
+		if (pSeqBlock->isRF())
+		{
+			const RFEvent& rfEvent = pSeqBlock->GetRFEvent();
+			const int& ushSamples = pSeqBlock->GetRFLength();
+			const float& fDwell = pSeqBlock->GetRFDwellTime();
+			const double& dDuration_us = ushSamples * fDwell;
+			RfInfo rfInfo(dCurrentStartTime_us+rfEvent.delay, dDuration_us, ushSamples, fDwell, &rfEvent);
+			m_vecRfLib.push_back(rfInfo);
 
-    QPen pen;
-    pen.setColor(Qt::blue);
-    pen.setWidth(1);
-    pen.setJoinStyle(Qt::MiterJoin);
-    pen.setCapStyle(Qt::FlatCap);
+			const int& magShapeID = rfEvent.magShape;
+			if (!m_mapShapeLib.contains(magShapeID))
+			{
+				std::vector<float> vecAmp(ushSamples+2, 0.f);
+				vecAmp[0] =0;
+				vecAmp[ushSamples+1] = std::numeric_limits<double>::quiet_NaN();
+				const float* fAmp = pSeqBlock->GetRFAmplitudePtr();
+				for (int index = 0; index < ushSamples; index++)
+				{
+					vecAmp[index] = fAmp[index];
+				}
+				m_mapShapeLib.insert(magShapeID, vecAmp);
+			}
 
-    float rfMaxAmp(0.);
-    float rfMinAmp(0.);
-    for(const auto& rfInfo : m_vecRfLib)
-    {
-        QCPGraph* rfGraph = ui->customPlot->addGraph(m_mapRect["RF"]->axis(QCPAxis::atBottom),
-                                                     m_mapRect["RF"]->axis(QCPAxis::atLeft));
-        rfGraph->setLineStyle(QCPGraph::lsStepLeft);
-        m_vecRfGraphs.append(rfGraph);
+			const int& phaseShapeID = rfEvent.phaseShape;
+			if (!m_mapShapeLib.contains(phaseShapeID))
+			{
+				std::vector<float> vecPhase(ushSamples+2, 0.f);
+				vecPhase[0] = std::numeric_limits<double>::quiet_NaN();
+				vecPhase[ushSamples+1] = std::numeric_limits<double>::quiet_NaN();
 
-        QPair<int, int> rfMagShapeID(rfInfo.event->magShape, rfInfo.event->phaseShape);
-        QVector<double> amplitudes = m_mapRfMagShapeLib[rfMagShapeID];
+				const float* fPhase = pSeqBlock->GetRFPhasePtr();
+				for (int index = 0; index < ushSamples; index++)
+				{
+					vecPhase[index] = fPhase[index];
+				}
+				m_mapShapeLib.insert(phaseShapeID, vecPhase);
+			}
 
-        double sampleTime = rfInfo.startAbsTime_us;
-        QVector<double> timePoints(rfInfo.samples+2, 0.);
-        timePoints[0] = sampleTime;
-        for(uint32_t index = 1; index < amplitudes.size() - 1; index++)
-        {
-            timePoints[index] = sampleTime;
-            sampleTime += rfInfo.dwell;
-        }
-        timePoints.back() = sampleTime;
+		}
+		dCurrentStartTime_us += pSeqBlock->GetDuration();
+		m_dTotalDuration_us += pSeqBlock->GetDuration();
+	}
 
+	std::cout << m_vecRfLib.size() << " RF events detetced!\n";
+	DrawRFWaveform(0, -1);
 
-        std::transform(amplitudes.begin(), amplitudes.end(), amplitudes.begin(),
-                       [rfInfo](double x) { return x * rfInfo.event->amplitude; });
-        auto maxIt = std::max_element(amplitudes.begin(), amplitudes.end());
-        auto minIt = std::min_element(amplitudes.begin(), amplitudes.end());
-        rfMaxAmp = std::max(rfMaxAmp, (float)*maxIt);
-        rfMinAmp = std::max(rfMinAmp, (float)*minIt);
-
-        rfGraph->setData(timePoints, amplitudes);
-        rfGraph->setPen(pen);
-        rfGraph->setSelectable(QCP::stWhole);
-    }
-    double marginRF = (rfMaxAmp - rfMinAmp) * 0.1;
-    m_mapRect["RF"]->axis(QCPAxis::atLeft)->setRange(rfMinAmp - marginRF, rfMaxAmp + marginRF);
-
-    for(const auto& gzInfo : m_vecGzLib)
-    {
-        QCPGraph* gzGraph = ui->customPlot->addGraph(m_mapRect["GZ"]->axis(QCPAxis::atBottom),
-                                                     m_mapRect["GZ"]->axis(QCPAxis::atLeft));
-        m_vecGyGraphs.append(gzGraph);
-
-        const QVector<double>& time = gzInfo.time;
-        const QVector<double>& amplitudes = gzInfo.amplitude;
-        gzGraph->setData(time, amplitudes);
-
-        gzGraph->setPen(pen);
-        gzGraph->setSelectable(QCP::stWhole);
-    }
-    const double& gzMaxAmp_Hz_m = m_stSeqInfo.gzMaxAmp_Hz_m;
-    const double& gzMinAmp_Hz_m = m_stSeqInfo.gzMinAmp_Hz_m;
-    double maxGzAbsAmp = std::max(std::abs(gzMaxAmp_Hz_m), std::abs(gzMinAmp_Hz_m));
-    double marginGz = maxGzAbsAmp * 0.1;
-    m_mapRect["GZ"]->axis(QCPAxis::atLeft)->setRange(- maxGzAbsAmp - marginGz, maxGzAbsAmp + marginGz);
-
-    for(const auto& gyInfo : m_vecGyLib)
-    {
-        QCPGraph* gyGraph = ui->customPlot->addGraph(m_mapRect["GY"]->axis(QCPAxis::atBottom),
-                                                     m_mapRect["GY"]->axis(QCPAxis::atLeft));
-        m_vecGxGraphs.append(gyGraph);
-
-        const QVector<double>& time = gyInfo.time;
-        const QVector<double>& amplitudes = gyInfo.amplitude;
-        gyGraph->setData(time, amplitudes);
-
-        gyGraph->setPen(pen);
-        gyGraph->setSelectable(QCP::stWhole);
-    }
-    const double& gyMaxAmp_Hz_m = m_stSeqInfo.gyMaxAmp_Hz_m;
-    const double& gyMinAmp_Hz_m = m_stSeqInfo.gyMinAmp_Hz_m;
-    double maxGyAbsAmp = std::max(std::abs(gyMaxAmp_Hz_m), std::abs(gyMinAmp_Hz_m));
-    double marginGy = maxGyAbsAmp * 0.1;
-    m_mapRect["GY"]->axis(QCPAxis::atLeft)->setRange(- maxGyAbsAmp - marginGy, maxGyAbsAmp + marginGy);
-
-    for(const auto& gxInfo : m_vecGxLib)
-    {
-        QCPGraph* gxGraph = ui->customPlot->addGraph(m_mapRect["GX"]->axis(QCPAxis::atBottom),
-                                                     m_mapRect["GX"]->axis(QCPAxis::atLeft));
-        m_vecGzGraphs.append(gxGraph);
-
-        const QVector<double>& time = gxInfo.time;
-        const QVector<double>& amplitudes = gxInfo.amplitude;
-        gxGraph->setData(time, amplitudes);
-
-        gxGraph->setPen(pen);
-        gxGraph->setSelectable(QCP::stWhole);
-    }
-    const double& gxMaxAmp_Hz_m = m_stSeqInfo.gxMaxAmp_Hz_m;
-    const double& gxMinAmp_Hz_m = m_stSeqInfo.gxMinAmp_Hz_m;
-    double maxGxAbsAmp = std::max(std::abs(gxMaxAmp_Hz_m), std::abs(gxMinAmp_Hz_m));
-    double marginGx = maxGxAbsAmp * 0.1;
-    m_mapRect["GX"]->axis(QCPAxis::atLeft)->setRange(- maxGxAbsAmp - marginGx, maxGxAbsAmp + marginGx);
-
-    for(const auto& adcInfo : m_vecAdcLib)
-    {
-        QCPGraph* adcGraph = ui->customPlot->addGraph(m_mapRect["ADC"]->axis(QCPAxis::atBottom),
-                                                     m_mapRect["ADC"]->axis(QCPAxis::atLeft));
-        m_vecAdcGraphs.append(adcGraph);
-
-        const QVector<double>& time = adcInfo.time;
-        const QVector<double>& amplitudes = adcInfo.amplitude;
-        adcGraph->setData(time, amplitudes);
-
-        adcGraph->setPen(pen);
-        adcGraph->setSelectable(QCP::stWhole);
-    }
-
-
-    UpdatePlotRange(0, m_stSeqInfo.totalDuration_us);
+	return true;
 }
 
-void MainWindow::onMousePress(QMouseEvent *event)
+std::tuple<double, size_t> MainWindow::calcRfCenter(const std::vector<double>& signal, const std::vector<double>& t)
 {
-    if (m_vecSeqBlocks.size() == 0) return;
-    if (event->button() == Qt::LeftButton)
-    {
-        ui->customPlot->setInteractions(QCP::Interactions());
-        m_bIsSelecting = true;
-        m_objSelectStartPos = event->pos();
+	// 计算 rfmax
+	double rfmax = *std::max_element(signal.begin(), signal.end(), [](double a, double b) {
+		return std::abs(a) < std::abs(b);
+		});
 
-        // 初始化选择框
-        double x = ui->customPlot->xAxis->pixelToCoord(m_objSelectStartPos.x());
-        double y = ui->customPlot->yAxis->pixelToCoord(m_objSelectStartPos.y());
-        m_pSelectionRect->topLeft->setCoords(x, y);
-        m_pSelectionRect->bottomRight->setCoords(x, y);
-        m_pSelectionRect->setVisible(true);
+	// 找到 ipeak
+	std::vector<size_t> ipeak;
+	for (size_t i = 0; i < signal.size(); ++i) 
+	{
+		if (std::abs(signal[i]) >= rfmax * 0.99999) 
+		{
+			ipeak.push_back(i);
+		}
+	}
 
-        ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-    }
-    else if (event->button() == Qt::RightButton)
-    {
-        m_bIsDragging = true;
-        setCursor(Qt::ClosedHandCursor);
-        m_objDragStartPos = event->pos();
-        m_dDragStartRange = ui->customPlot->xAxis->range().lower;
-    }
+	// 计算 tc 和 ic
+	double tc = (t[ipeak.front()] + t[ipeak.back()]) / 2;
+	size_t ic = ipeak[ipeak.size() / 2];
+
+	return std::make_tuple(tc, ic);
 }
 
-void MainWindow::onMouseMove(QMouseEvent *event)
+void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
 {
-    if (m_vecSeqBlocks.size() == 0) return;
-    if(m_bIsSelecting)
-    {
-        double yMin = ui->customPlot->yAxis->range().lower;
-        double yMax = ui->customPlot->yAxis->range().upper;
-        // 更新选择框
-        double x1 = ui->customPlot->xAxis->pixelToCoord(m_objSelectStartPos.x());
-        double y1 = ui->customPlot->yAxis->pixelToCoord(m_objSelectStartPos.y());
-        double x2 = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
-        double y2 = ui->customPlot->yAxis->pixelToCoord(event->pos().y());
+	// 定义 7 种颜色 用于绘制不同的RF波形
+	QVector<QColor> colors = {
+		QColor::fromRgbF(0,0.447,0.741),
+		QColor::fromRgbF(0.85,0.325,0.098),
+		QColor::fromRgbF(0.929,0.694,0.125),
+		QColor::fromRgbF(0.494,0.184,0.556),
+		QColor::fromRgbF(0.466,0.674,0.188),
+		QColor::fromRgbF(0.301,0.745,0.933),
+		QColor::fromRgbF(0.635,0.078,0.184)
+	};
 
-        // 限制 y 值在有效范围内
-        y1 = qBound(yMin, y1, yMax);
-        y2 = qBound(yMin, y2, yMax);
+	double t0 = 0;
+	int cnt = 0;
+	double min1 = std::numeric_limits<double>::max(), max1 = std::numeric_limits<double>::min();
+	double min2 = std::numeric_limits<double>::max(), max2 = std::numeric_limits<double>::min();
+	for (long long i = 0; i < m_spPulseqSeq->GetNumberOfBlocks(); i++)
+	{
 
-        m_pSelectionRect->topLeft->setCoords(qMin(x1, x2), qMax(y1, y2));
-        m_pSelectionRect->bottomRight->setCoords(qMax(x1, x2), qMin(y1, y2));
+		SeqBlock* pSeqBlock = m_spPulseqSeq->GetBlock(i);
+		m_spPulseqSeq->decodeBlock(pSeqBlock);
+		if (pSeqBlock->isRF())
+		{
+			const RFEvent& rfEvent = pSeqBlock->GetRFEvent();
+			const int& ushSamples = pSeqBlock->GetRFLength();
+			const float& fDwell = pSeqBlock->GetRFDwellTime();
+			const double& dDuration_us = ushSamples * fDwell;
 
-        ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-    }
-    else if (m_bIsDragging)
-    {
-        int pixelDx = event->pos().x() - m_objDragStartPos.x();
-        double dx = ui->customPlot->xAxis->pixelToCoord(pixelDx) - ui->customPlot->xAxis->pixelToCoord(0);
+			// t:每组RF有对应的block start time(依据之前的block算出来)，rf的delay，block的rfDwellTime_us
+			// y_1:block的rfAmplitude[]和rf的amplitude
+			// y_2:phase,angle(s.*sign(real(s))*exp(1i*rf.phaseOffset).*exp(1i*2*pi*t    *rf.freqOffset))
+			double t = t0 + rfEvent.delay;
+			const float* rfList = pSeqBlock->GetRFAmplitudePtr();
+			const float* phaseList = pSeqBlock->GetRFPhasePtr();
+			const int RFLength = pSeqBlock->GetRFLength();
 
-        const QCPRange& xRange = ui->customPlot->xAxis->range();
-        double xSpan = xRange.size();
+			// 添加波形数据点
+			QVector<double> timePoints(RFLength, 0.); // us
+			QVector<double> amplitudes(RFLength, 0.); // *rfEvent.amplitude Hz
+			QVector<double> phases(RFLength, 0.); // rad
+			int step = 1;
+			//if(RFLength > 200)
+			//{
+			//	step = round(m_spPulseqSeq->GetGradientRasterTime_us() / fDwell);
+			//}
 
-        double x1New = m_dDragStartRange - dx;
-        double x2New = x1New + xSpan;
+			for (int j = 0; j < RFLength; j = j + step )
+			{
+				timePoints[j] = (t + j * fDwell);
+				amplitudes[j] = rfList[j] * rfEvent.amplitude * cos(phaseList[j]);
 
-        x1New = x1New < 0 ? 0 : x1New;
-        x2New = x2New > m_stSeqInfo.totalDuration_us ? m_stSeqInfo.totalDuration_us : x2New;
-        UpdatePlotRange(x1New, x2New);
-    }
-}
+				std::complex<double> signal = std::polar(double(amplitudes[j]), double(phaseList[j] + rfEvent.phaseOffset + 2 * PI *j * fDwell * rfEvent.freqOffset / 1000000));
+				phases[j] = std::arg(signal);
+				//phases[j] = phaseList[j] + rfEvent.phaseOffset + 2 * PI * j * fDwell * rfEvent.freqOffset / 1000000;
+			}
+			QVector<double> timePoints2 = timePoints;
 
-void MainWindow::onMouseRelease(QMouseEvent *event)
-{
-    if (m_vecSeqBlocks.size() == 0) return;
-
-    setInteraction(true);
-    if(event->button() == Qt::LeftButton && m_bIsSelecting)
-    {
-        m_bIsSelecting = false;
-        m_pSelectionRect->setVisible(false);
-
-        // 获取选择的时间范围
-        double x1 = ui->customPlot->xAxis->pixelToCoord(m_objSelectStartPos.x());
-        double x2 = ui->customPlot->xAxis->pixelToCoord(event->pos().x());
-
-        // 如果选择范围太小，认为是点击事件，不进行缩放
-        if(qAbs(x2 - x1) > 5)
-        {  
-            if (x2 > x1)
+            if(amplitudes.first() != 0)
             {
-                UpdatePlotRange(x1, x2);
+                timePoints.prepend(timePoints.first());
+                amplitudes.prepend(0);
             }
-            else
+            if (amplitudes.last() != 0)
             {
-                QCPRange currentRange = ui->customPlot->xAxis->range();
-                double center = (currentRange.lower + currentRange.upper) / 2;
-                double newSpan = currentRange.size() * 3;  // 可以调整这个倍数
-
-                double x1New = center - newSpan / 2;
-                double x2New = center + newSpan / 2;
-
-                x1New = x1New < 0 ? 0 : x1New;
-                x2New = x2New > m_stSeqInfo.totalDuration_us ? m_stSeqInfo.totalDuration_us : x2New;
-                UpdatePlotRange(x1New, x2New);
+                timePoints.append(timePoints.last());
+                amplitudes.append(0);
             }
-        }
-    }
-    else if (event->button() == Qt::RightButton && m_bIsDragging)
-    {
-        m_bIsDragging = false;
-        setCursor(Qt::ArrowCursor);
-    }
+
+			// 在数据点之间插入NaN值以创建不连续的曲线
+			//timePoints.append(timePoints.last());
+			//amplitudes.append(std::numeric_limits<double>::quiet_NaN());
+
+			// phases
+			if (phases.first() != 0)
+			{
+				timePoints2.prepend(timePoints2.first());
+				phases.prepend(0);
+			}
+			if (phases.last() != 0)
+			{
+				timePoints2.append(timePoints2.last());
+				phases.append(0);
+			}
+			// 在数据点之间插入NaN值以创建不连续的曲线
+			//timePoints2.append(timePoints2.last());
+			//phases.append(std::numeric_limits<double>::quiet_NaN());
+
+			
+			QPen pen(colors[cnt % colors.size()]);
+			pen.setWidthF(1);
+			cnt++;
+
+			// 添加波形数据点
+			auto graph_RF_Mag = ui->customPlot->addGraph(m_vecRects[1]->axis(QCPAxis::atBottom), m_vecRects[1]->axis(QCPAxis::atLeft));
+			graph_RF_Mag->setPen(pen);
+			graph_RF_Mag->addData(timePoints, amplitudes);
+
+			auto graph_RFADC_ph = ui->customPlot->addGraph(m_vecRects[2]->axis(QCPAxis::atBottom), m_vecRects[2]->axis(QCPAxis::atLeft));
+			graph_RFADC_ph->setPen(pen);
+			graph_RFADC_ph->addData(timePoints2, phases);
+
+			// 设置散点样式为 "x"
+			auto graph_RFADC_ph2 = ui->customPlot->addGraph(m_vecRects[2]->axis(QCPAxis::atBottom), m_vecRects[2]->axis(QCPAxis::atLeft));
+			QCPScatterStyle scatterStyle(QCPScatterStyle::ssCross, 5);
+			graph_RFADC_ph2->setScatterStyle(scatterStyle);
+			graph_RFADC_ph2->setPen(QPen(Qt::blue));
+
+			{
+				// 调用 calcRfCenter 函数
+				std::vector<double> signal(amplitudes.begin(), amplitudes.end());
+				std::vector<double> t(timePoints.begin(), timePoints.end());
+				auto [tc, ic] = calcRfCenter(signal, t);
+				graph_RFADC_ph2->addData(tc, phases[ic]);
+			}
+
+			//graph_RF_Mag->addData(timePoints.last(), std::numeric_limits<double>::quiet_NaN());
+			//m_vecGraphs[2]->addData(timePoints2.last(), std::numeric_limits<double>::quiet_NaN());
+
+			{
+				// 记录amplitudes列表中的最大值
+				max1 = std::max(max1, *std::max_element(amplitudes.begin(), amplitudes.end()));
+				min1 = std::min(min1, *std::min_element(amplitudes.begin(), amplitudes.end()));
+			}
+			{
+				// 记录ph列表中的最大值
+				max2 = std::max(max2, *std::max_element(phases.begin(), phases.end()));
+				min2 = std::min(min2,  *std::min_element(phases.begin(), phases.end()));
+			}
+		}
+
+		t0 += pSeqBlock->GetDuration();
+	}
+
+	// Y轴范围
+	// Y1
+	{
+		double range1 = min1 - 0.03 * (max1 - min1);
+		double range2 = max1 + 0.03 * (max1 - min1);
+		// 设置m_vecGraphs[1]的Y轴范围为0到maxAmplitude
+		m_vecRects[1]->axis(QCPAxis::atLeft)->setRange(range1, range2);
+	}
+	// Y2
+	{
+		double range1 = min2 - 0.03 * (max2 - min2);
+		double range2 = max2 + 0.03 * (max2 - min2);
+		// 设置m_vecGraphs[2]的Y轴范围为0到maxAmplitude
+		m_vecRects[2]->axis(QCPAxis::atLeft)->setRange(range1, range2);
+	}
+
+	// X轴范围
+	ui->customPlot->xAxis->setRange(0, t0);
+	ui->customPlot->replot();
 }
 
-void MainWindow::setInteraction(const bool& enable)
-{
-    if (enable)
-    {
-        ui->customPlot->setEnabled(true);
-        ui->customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
-    }
-    else
-    {
-        ui->customPlot->setEnabled(false);
-        ui->customPlot->setInteraction(QCP::iNone);
-    }
-}
+//void MainWindow::DrawRFWaveform(const double& dStartTime, double dEndTime)
+//{
+//	// @TODO: fix time range, add reset. fix right click
+//	if (m_vecSeqBlocks.size() == 0) return;
+//	if (m_vecRfLib.size() == 0) return;
+//	if(dEndTime < 0) dEndTime = m_dTotalDuration_us;
+//
+//	double dMaxAmp(0.);
+//	double dMinAmp(0.);
+//	for(const auto& rfInfo : m_vecRfLib)
+//	{
+//		const auto& rf = rfInfo.event;
+//		const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
+//		const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
+//
+//		// 添加波形数据点
+//		double signal(0.);
+//		for(uint32_t index = 0; index < vecAmp.size(); index++)
+//		{
+//			const float& amp = vecAmp[index];
+//			const float& phase = vecPhase[index];
+//			signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+//			dMaxAmp = std::max(dMaxAmp, signal);
+//			dMinAmp = std::min(dMinAmp, signal);
+//		}
+//	}
+//	double margin = (dMaxAmp - dMinAmp) * 0.1;
+//	m_pRfMagRect->axis(QCPAxis::atLeft)->setRange(dMinAmp - margin, dMaxAmp+ margin);
+//	QCPRange newRange(dStartTime, dEndTime);
+//	m_pRfMagRect->axis(QCPAxis::atBottom)->setRange(newRange);
+//	m_pRfADCPhaseRect->axis(QCPAxis::atBottom)->setRange(newRange);
+//
+//	// 只处理时间范围内的RF
+//	for(const auto& rfInfo : m_vecRfLib)
+//	{
+//		// 跳过范围外的RF
+//		if(rfInfo.startAbsTime_us + rfInfo.duration_us < dStartTime) continue;
+//		if(rfInfo.startAbsTime_us > dEndTime) break;
+//
+//		QCPGraph* rfGraph = ui->customPlot->addGraph(m_pRfMagRect->axis(QCPAxis::atBottom),
+//			m_pRfMagRect->axis(QCPAxis::atLeft));
+//		m_vecGraphs.append(rfGraph);
+//
+//		const auto& rf = rfInfo.event;
+//		double sampleTime = rfInfo.startAbsTime_us;
+//		const std::vector<float>& vecAmp = m_mapShapeLib[rf->magShape];
+//		const std::vector<float>& vecPhase = m_mapShapeLib[rf->phaseShape];
+//
+//		QVector<double> timePoints(vecAmp.size(), 0.);
+//		QVector<double> amplitudes(vecAmp.size(), 0.);
+//
+//		// 添加波形数据点
+//		double signal(0.);
+//		for(uint32_t index = 0; index < vecAmp.size(); index++)
+//		{
+//			const float& amp = vecAmp[index];
+//			const float& phase = vecPhase[index];
+//			signal = std::abs(std::polar(amp, phase)) * rfInfo.event->amplitude;
+//			timePoints[index] = sampleTime;
+//			amplitudes[index] = signal;
+//			sampleTime += rfInfo.dwell;
+//		}
+//		rfGraph->setData(timePoints, amplitudes);
+//		rfGraph->setPen(QPen(Qt::blue));
+//		rfGraph->setSelectable(QCP::stWhole);
+//	}
+//
+//	ui->customPlot->xAxis->setRange(dStartTime, dEndTime);
+//	ui->customPlot->replot();
+//}
 
-
-void MainWindow::SlotExportData()
-{
-    if(!m_pSelectedGraph)
-    {
-        QMessageBox::information(this, "Hint", "Please select a graph!");
-        return;
-    }
-
-    // 找到选中的graph在vector中的索引
-    int graphIndex(-1);
-
-    if (std::find(m_vecRfGraphs.begin(), m_vecRfGraphs.end(), m_pSelectedGraph) != m_vecRfGraphs.end())
-    {
-        graphIndex = m_vecRfGraphs.indexOf(m_pSelectedGraph);
-    }
-    else if (std::find(m_vecGzGraphs.begin(), m_vecGzGraphs.end(), m_pSelectedGraph) != m_vecGzGraphs.end())
-    {
-        graphIndex = m_vecGzGraphs.indexOf(m_pSelectedGraph);
-    }
-    else if (std::find(m_vecGyGraphs.begin(), m_vecGyGraphs.end(), m_pSelectedGraph) != m_vecGyGraphs.end())
-    {
-        graphIndex = m_vecGyGraphs.indexOf(m_pSelectedGraph);
-    }
-    else if (std::find(m_vecGxGraphs.begin(), m_vecGxGraphs.end(), m_pSelectedGraph) != m_vecGxGraphs.end())
-    {
-        graphIndex = m_vecGxGraphs.indexOf(m_pSelectedGraph);
-    }
-    else if (std::find(m_vecAdcGraphs.begin(), m_vecAdcGraphs.end(), m_pSelectedGraph) != m_vecAdcGraphs.end())
-    {
-        graphIndex = m_vecAdcGraphs.indexOf(m_pSelectedGraph);
-    }
-    else
-    {
-        return;
-    }
-
-    // QString fileName = QFileDialog::getSaveFileName(this,
-    //                                                 tr("保存波形数据"), "",
-    //                                                 tr("文本文件 (*.txt);;所有文件 (*)"));
-
-    // if(fileName.isEmpty()) return;
-
-    QString fileName = "D:\\data.txt";
-
-    QFile file(fileName);
-    if(file.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        QTextStream stream(&file);
-
-        QSharedPointer<QCPGraphDataContainer> data = m_pSelectedGraph->data();
-        double time(0.);
-        double point(0.);
-        for(int i = 0; i < data->size(); ++i)
-        {
-            time = data->at(i)->key;
-            point = data->at(i)->value;
-            stream << time << "\t" << point << "\n";
-        }
-
-        file.close();
-        QMessageBox::information(this, "成功", "数据已成功导出");
-    }
-    else
-    {
-        QMessageBox::warning(this, "错误", "无法创建文件");
-    }
-}
-
-void MainWindow::SlotSaveScreenshot()
-{
-    QPixmap pixmap(ui->customPlot->width(), ui->customPlot->height());
-    pixmap.setDevicePixelRatio(2.0);
-    ui->customPlot->savePng("D:\\pv.png");
-}
-
+// 拖拽进入事件
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (event->mimeData()->hasUrls())
-    {
-        event->acceptProposedAction();
-    }
+	if (event->mimeData()->hasUrls()) {
+		event->acceptProposedAction();
+	}
 }
 
+// 拖拽放下事件
 void MainWindow::dropEvent(QDropEvent *event)
 {
-    const QMimeData* mimeData = event->mimeData();
-    // 获取拖拽的文件URL列表
-    if (mimeData->hasUrls()) {
-        QList<QUrl> urlList = mimeData->urls();
-        // 获取第一个文件的本地路径
-        m_sPulseqFilePath = urlList.at(0).toLocalFile();
-        // 调用你的文件加载函数
-        if (!LoadPulseqFile(m_sPulseqFilePath))
-        {
-            std::stringstream sLog;
-            sLog << "Load " << m_sPulseqFilePath.toStdString() << " failed!";
-            QMessageBox::critical(this, "File Error", sLog.str().c_str());
-            return;
-        }
-        m_sPulseqFilePathCache = m_sPulseqFilePath;
-    }
+	const QMimeData* mimeData = event->mimeData();
+	// 获取拖拽的文件URL列表
+	if (mimeData->hasUrls()) {
+		QList<QUrl> urlList = mimeData->urls();
+		// 获取第一个文件的本地路径
+		m_sPulseqFilePath = urlList.at(0).toLocalFile();
+		// 调用你的文件加载函数
+		if (!LoadPulseqFile(m_sPulseqFilePath))
+		{
+			std::stringstream sLog;
+			sLog << "Load " << m_sPulseqFilePath.toStdString() << " failed!";
+			QMessageBox::critical(this, "File Error", sLog.str().c_str());
+			return;
+		}
+		m_sPulseqFilePathCache = m_sPulseqFilePath;
+	}
 }
 
-void MainWindow::onAxisRangeChanged(const QCPRange& newRange)
-{
-    QCPAxis* axis = qobject_cast<QCPAxis*>(sender());
-    if (!axis) return;
-
-    // check if exceeding range
-    if (newRange.lower < 0 || newRange.upper > m_stSeqInfo.totalDuration_us) {
-        QCPRange boundedRange = newRange;
-        if (boundedRange.lower < 0)
-        {
-            boundedRange.lower = 0;
-            boundedRange.upper = qMin(0 + newRange.size(), m_stSeqInfo.totalDuration_us);
-        }
-        if (boundedRange.upper > m_stSeqInfo.totalDuration_us)
-        {
-            boundedRange.upper = m_stSeqInfo.totalDuration_us;
-            boundedRange.lower = qMax(m_stSeqInfo.totalDuration_us - newRange.size(), 0.);
-        }
-        axis->setRange(boundedRange);
-    }
-}
-
-void MainWindow::onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event)
-{
-    QCPGraph* graph = qobject_cast<QCPGraph*>(plottable);
-    if(!graph) return;
-
-    m_pSelectedGraph = graph;
-}
-
-void MainWindow::handleDPIChange()
-{
-    QScreen *screen = QGuiApplication::primaryScreen();
-    if (!screen) return;
-
-    qreal newDpr = screen->devicePixelRatio();
-    ui->customPlot->setBufferDevicePixelRatio(newDpr);
-
-    // 更新渲染设置
-    QSurfaceFormat format;
-    format.setSamples(16 * newDpr);  // 根据 DPI 调整采样
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    QSurfaceFormat::setDefaultFormat(format);
-
-    // 强制重绘
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
-// 3. 如果有窗口大小改变事件，也需要处理
-void MainWindow::resizeEvent(QResizeEvent *event)
-{
-    QWidget::resizeEvent(event);
-
-    // 重新设置缩放
-    QScreen *screen = QGuiApplication::primaryScreen();
-    if (screen) {
-        ui->customPlot->setBufferDevicePixelRatio(screen->devicePixelRatio());
-        ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-    }
-}
-
-void MainWindow::windowScreenChanged(QScreen *screen)
-{
-    if (!screen) return;
-
-    // 断开旧的连接
-    for (QScreen *s : QGuiApplication::screens()) {
-        disconnect(s, &QScreen::logicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
-        disconnect(s, &QScreen::physicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
-    }
-
-    // 连接新显示器的信号
-    connect(screen, &QScreen::logicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
-    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &MainWindow::handleDPIChange);
-
-    // 更新当前显示器的 DPI 设置
-    ui->customPlot->setBufferDevicePixelRatio(screen->devicePixelRatio());
-    ui->customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
 

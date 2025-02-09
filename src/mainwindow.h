@@ -7,15 +7,30 @@
 #include <qcustomplot.h>
 
 #include <ExternalSequence.h>
-#include "pulseq_loader.h"
 
-#define BASIC_WIN_TITLE              ("PulseqViewer")
-#define SAFE_DELETE(p)               { if(p) { delete p; p = nullptr; } }
 
+#define SAFE_DELETE(p) { if(p) { delete p; p = nullptr; } }
 
 namespace Ui {
 class MainWindow;
 }
+
+struct RfInfo
+{
+    double startAbsTime_us;
+    double duration_us;
+    uint16_t samples;
+    float dwell;
+    const RFEvent* event;
+
+    RfInfo(const double& dStartAbsTime_us, const double& dDuration_us, const uint16_t ushSamples, const float& fDwell, const RFEvent* pRfEvent)
+        : startAbsTime_us(dStartAbsTime_us)
+        , duration_us(dDuration_us)
+        , samples(ushSamples)
+        , dwell(fDwell)
+        , event(pRfEvent)
+    {}
+};
 
 class MainWindow : public QMainWindow
 {
@@ -32,46 +47,27 @@ private:
     void InitSlots();
     void InitStatusBar();
     void InitSequenceFigure();
-    void UpdatePlotRange(const double& x1, const double& x2);
-    void RestoreViewLayout();
-    void UpdateAxisVisibility();
+
+    // Slots-File
+    void OpenPulseqFile();
+    void ReOpenPulseqFile();
+
+    // Slots-View
+    void ResetView();
+
+    // Slots-Interaction
+    void DrawRFWaveform(const double& dStartTime = 0, double dEndTime = -1);
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
     // Pulseq
     void ClearPulseqCache();
     bool LoadPulseqFile(const QString& sPulseqFilePath);
     bool ClosePulseqFile();
-    void DrawWaveform();
+    bool LoadPulseqEvents();
+    bool IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples);
 
-private slots:
-    // Slots-File
-    void SlotOpenPulseqFile();
-    void SlotReOpenPulseqFile();
-    void SlotEnableRFAxis();
-    void SlotEnableGZAxis();
-    void SlotEnableGYAxis();
-    void SlotEnableGXAxis();
-    void SlotEnableADCAxis();
-    void SlotEnableTriggerAxis();
-
-    // Slot-Analysis
-    void SlotExportData();
-    void SlotSaveScreenshot();
-
-    // Slot-View
-    void SlotResetView();
-
-    // Slots-Interaction
-    void onMousePress(QMouseEvent* event);
-    void onMouseMove(QMouseEvent* event);
-    void onMouseRelease(QMouseEvent* event);
-    void dragEnterEvent(QDragEnterEvent *event) override;
-    void dropEvent(QDropEvent *event) override;
-    void onAxisRangeChanged(const QCPRange &newRange);
-    void onPlottableClick(QCPAbstractPlottable *plottable, int dataIndex, QMouseEvent *event);
-    void setInteraction(const bool& enable);
-    void resizeEvent(QResizeEvent *event) override;
-    void handleDPIChange();
-    void windowScreenChanged(QScreen *screen);
+    std::tuple<double, size_t> calcRfCenter(const std::vector<double>& signal, const std::vector<double>& t);
 
 private:
     Ui::MainWindow                       *ui;
@@ -84,50 +80,52 @@ private:
     QString                              m_sPulseqFilePathCache;
     QStringList                          m_listRecentPulseqFilePaths;
     std::shared_ptr<ExternalSequence>    m_spPulseqSeq;
-    QVector<SeqBlock*>                   m_vecSeqBlocks;
-    QString                              m_sPulseqVersion;
-    SeqInfo                              m_stSeqInfo;
+    std::vector<SeqBlock*>               m_vecSeqBlocks;
+    double                               m_dTotalDuration_us;
 
-    QMap<int, QVector<float>>            m_mapShapeLib;
-    RfTimeWaveShapeMap                   m_mapRfMagShapeLib;
+    QMap<int, std::vector<float>>        m_mapShapeLib;
     // RF
+    uint64_t                             m_lRfNum;
     QVector<RfInfo>                      m_vecRfLib;
 
     // GZ
     uint64_t                             m_lGzNum;
-    QVector<GradTrapInfo>                m_vecGzLib;
+    QVector<GradEvent>                   m_vecGzLib;
 
     // GY
     uint64_t                             m_lGyNum;
-    QVector<GradTrapInfo>                m_vecGyLib;
+    QVector<GradEvent>                   m_vecGyLib;
 
     // GX
     uint64_t                             m_lGxNum;
-    QVector<GradTrapInfo>                m_vecGxLib;
+    QVector<GradEvent>                   m_vecGxLib;
 
     // ADC
     uint64_t                             m_lAdcNum;
-    QVector<AdcInfo>                     m_vecAdcLib;
+    QVector<ADCEvent>                    m_vecAdcLib;
 
     // Plot
-    QMap<QString, QVector<QCPGraph*>>    m_mapGraphs;
-    QVector<QCPGraph*>                   m_vecRfGraphs;
-    QVector<QCPGraph*>                   m_vecGzGraphs;
-    QVector<QCPGraph*>                   m_vecGyGraphs;
-    QVector<QCPGraph*>                   m_vecGxGraphs;
-    QVector<QCPGraph*>                   m_vecAdcGraphs;
-    QMap<QString, QCPAxisRect*>          m_mapRect;
-    QMap<QString, QAction*>              m_mapAxisAction;
-    QList<QString>                       m_listAxis;
+    QVector<QCPAxisRect*>                m_vecRects;
+
+    QCPAxisRect*                         m_pADCLabelsRect;
+    QCPAxisRect*                         m_pRfMagRect;
+	QCPAxisRect*                         m_pRfADCPhaseRect;
+    QCPAxisRect*                         m_pGxRect;
+    QCPAxisRect*                         m_pGyRect;
+    QCPAxisRect*                         m_pGzRect;
+
+
+
 
     // Interaction
     bool                                 m_bIsSelecting;
-    bool                                 m_bIsDragging;
     QPoint                               m_objSelectStartPos;
     QCPItemRect*                         m_pSelectionRect;
-    QPoint                               m_objDragStartPos;
+    QPoint                               m_objDragStartPos;       // 记录拖拽起始位置
     double                               m_dDragStartRange;
-    QCPGraph*                            m_pSelectedGraph;
+
+private slots:
+    void synchronizeXAxes(const QCPRange& newRange);
 };
 
 #endif // MAINWINDOW_H
