@@ -396,7 +396,7 @@ bool MainWindow::LoadPulseqFile(const QString& sPulseqFilePath)
 	m_pProgressBar->setValue(100);
 	this->setEnabled(true);
 
-	nBlockRangeStart = 0;
+	nBlockRangeStart = 10;
 	nBlockRangeEnd = std::min(int(lSeqBlockNum - 1), 100);
 
 	
@@ -877,7 +877,25 @@ void MainWindow::onMouseMove(QMouseEvent* event)
 
 	if (found)
 	{
-		QString coordText = QString("X: %1").arg(closestX);
+		// 计算当前是第多少个 block
+		int currentBlock = -1;
+		for (int i = 0; i < vecBlockEdges.size() - 1; ++i)
+		{
+			if (closestX >= vecBlockEdges[i] && closestX < vecBlockEdges[i + 1])
+			{
+				currentBlock = i;
+				break;
+			}
+		}
+
+		QString coordText = QString("Time: %1 %2").arg(closestX).arg(TimeUnits);
+		if (currentBlock != -1)
+		{
+			coordText += QString(", Block: %1").arg(currentBlock);
+		}
+
+		QVector<QString> yTexts = {"ADC/labels", "RF mag", "RF/ADC ph", "Gx", "Gy", "Gz"};
+		QVector<QString> yUnits = { "", "Hz", "rad", "KHz/m", "KHz/m", "KHz/m" };
 		for (int i = 0; i < m_vecVerticalLine.count(); i++)
 		{
 			m_vecVerticalLine[i]->point1->setCoords(closestX, m_vecRects[i]->axis(QCPAxis::atBottom)->range().lower);
@@ -900,7 +918,7 @@ void MainWindow::onMouseMove(QMouseEvent* event)
 					}
 					if (!isnan(y))
 					{
-						coordText += QString(", Y%1: %2").arg(i).arg(y);
+						coordText += QString(", %1: %2 %3").arg(yTexts[i]).arg(y).arg(yUnits[i]);
 					}
 				}
 			}
