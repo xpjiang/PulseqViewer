@@ -703,6 +703,77 @@ void MainWindow::DrawGWaveform(const double& dStartTime, double dEndTime)
 					cnt1++;
 
 				}
+				else if (pSeqBlock->isArbitraryGradient(channel))
+				{
+					// Arbitrary:
+					//int waveShape;        /**< @brief whave shape ID for arbitrary gradient */
+					//int timeShape;        /**< @brief time shape ID for arbitrary gradient; 0 means regular sampling */
+					/**
+					* @brief Return the number of samples of the arbitrary gradient on the given gradient channel.
+					* Only relevant for arbitrary gradients
+					*/
+					//int     GetArbGradNumSamples(int channel);
+
+					/**
+					 * @brief Directly get a pointer to the samples of the arbitrary gradient
+					 */
+					//float* GetArbGradShapePtr(int channel);
+					float* gradAmplitude = pSeqBlock->GetArbGradShapePtr(channel);
+					int gradNumSamples = pSeqBlock->GetArbGradNumSamples(channel);
+					QVector<double> t(gradNumSamples, 0.);
+					QVector<double> y(gradNumSamples, 0.);
+					double gradRasterTime_us = m_spPulseqSeq->GetGradientRasterTime_us();
+					for (size_t i = 0; i < gradNumSamples; i++)
+					{
+						t[i] = t0 + grad.delay * tFactor + i * gradRasterTime_us * tFactor;
+						y[i] = gradAmplitude[i] / 1000;
+					}
+					{
+						auto graph_G = ui->customPlot->addGraph(m_vecRects[channel + 3]->axis(QCPAxis::atBottom), m_vecRects[channel + 3]->axis(QCPAxis::atLeft));
+						QPen pen(colors[cnt1 % colors.size()]);
+						pen.setWidthF(1);
+						graph_G->setPen(pen);
+						graph_G->addData(t, y);
+					}
+					cnt1++;
+				}
+				else if (pSeqBlock->isExtTrapGradient(channel))
+				{
+					/**
+					* @brief Return the timening and the shape of the ExtTrp grdient on the given gradient channel.
+					* Only relevant for ExtTrap gradients
+					*/
+					//const std::vector<long>& GetExtTrapGradTimes(int channel);
+
+					/**
+					 * @brief Return the timening and the shape of the ExtTrp grdient on the given gradient channel.
+					 * Only relevant for ExtTrap gradients
+					 */
+					//const std::vector<float>& GetExtTrapGradShape(int channel);
+					std::vector<long> gradTimes = pSeqBlock->GetExtTrapGradTimes(channel);
+					std::vector<float> gradShape = pSeqBlock->GetExtTrapGradShape(channel);
+					if (gradTimes.size() != gradShape.size())
+					{
+						std::cout << "gradTimes.size() != gradShape.size()\n";
+						return;
+					}
+					// 添加波形数据点
+					QVector<double> t(gradTimes.size(), 0.);
+					QVector<double> y(gradTimes.size(), 0.);
+					for (size_t i = 0; i < gradTimes.size(); i++)
+					{
+						// todo:check ExtTrapGradTimes  t0 + grad.delay + gradTimes[i] * tFactor
+						t[i] = t0 + grad.delay * tFactor + gradTimes[i] * tFactor * tFactor;
+						y[i] = gradShape[i] / 1000;
+					}
+					{
+						auto graph_G = ui->customPlot->addGraph(m_vecRects[channel + 3]->axis(QCPAxis::atBottom), m_vecRects[channel + 3]->axis(QCPAxis::atLeft));
+						QPen pen(colors[cnt1 % colors.size()]);
+						pen.setWidthF(1);
+						graph_G->setPen(pen);
+						graph_G->addData(t, y);
+					}
+				}
 
 				{
 					// 记录amplitudes列表中的最大值
