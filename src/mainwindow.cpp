@@ -1076,21 +1076,16 @@ void MainWindow::showBlockInformation()
 
 			if (!m_pBlockInfoDialog)
 			{
-				m_pBlockInfoDialog = new QDialog(this);
-				m_pBlockInfoDialog->setWindowTitle("Block Information");
-				QVBoxLayout* layout = new QVBoxLayout(m_pBlockInfoDialog);
-				QLabel* label = new QLabel(blockInfo, m_pBlockInfoDialog);
-				layout->addWidget(label);
-				m_pBlockInfoDialog->setLayout(layout);
+				m_pBlockInfoDialog = new EventBlockInfoDialog(this);
+				//m_pBlockInfoDialog->setWindowTitle("Block Information");
+				//QVBoxLayout* layout = new QVBoxLayout(m_pBlockInfoDialog);
+				//QLabel* label = new QLabel(blockInfo, m_pBlockInfoDialog);
+				//layout->addWidget(label);
+				//m_pBlockInfoDialog->setLayout(layout);
+				
 			}
-			else
-			{
-				QLabel* label = m_pBlockInfoDialog->findChild<QLabel*>();
-				if (label)
-				{
-					label->setText(blockInfo);
-				}
-			}
+
+			m_pBlockInfoDialog->setInfoContent(blockInfo);
 
 			m_pBlockInfoDialog->show();
 		}

@@ -15,6 +15,48 @@ namespace Ui {
 class MainWindow;
 }
 
+class EventBlockInfoDialog : public QDialog 
+{
+public:
+    explicit EventBlockInfoDialog(QWidget* parent = nullptr) : QDialog(parent)
+    {
+        // 设置窗口属性
+        setWindowTitle("Event Block");
+        setWindowModality(Qt::NonModal); // 设置为非模态对话框
+        resize(600, 200);                // 设置初始尺寸
+
+        // 创建文本框控件
+        textEdit = new QPlainTextEdit(this);
+        textEdit->setReadOnly(true);     // 设置为只读模式
+        textEdit->setWordWrapMode(QTextOption::NoWrap); // 禁用自动换行
+
+        // 创建布局并添加控件
+        QVBoxLayout* layout = new QVBoxLayout(this);
+        layout->setContentsMargins(2, 2, 2, 2); // 紧凑边距
+        layout->addWidget(textEdit);
+
+        // 构造显示内容（示例数据）
+        //QString content =
+        //    "Event Block No.: 0\n"
+        //    "Event Block Start Time: 1000 [us]\n"
+        //    "Event Block Duration: 20000 [us]\n"
+        //    "Y-Value: 10.9\n"
+        //    "Y-Unit: Volt\n"
+        //    "Max/Min value: 10.996/0\n"
+        //    "X Gradient: 0 mT/m\n"
+        //    "Y Gradient: 0 mT/m\n"
+        //    "Z Gradient: -4.95443 mT/m";
+
+        //textEdit->setPlainText(content);
+    }
+	void setInfoContent(QString content)
+	{
+		textEdit->setPlainText(content);
+	}
+private:
+	QPlainTextEdit* textEdit;
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -60,7 +102,7 @@ private:
 private:
     Ui::MainWindow                       *ui;
     QPoint m_rightClickPos;
-    QDialog* m_pBlockInfoDialog;
+    EventBlockInfoDialog* m_pBlockInfoDialog;
     
 
     QLabel                               *m_pVersionLabel;
