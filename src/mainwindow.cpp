@@ -15,6 +15,7 @@ MainWindow::MainWindow(QWidget *parent)
 	, m_bIsSelecting(false)
 	, m_dTotalDuration_us(0.)
 	, m_dDragStartRange(0.)
+	, m_pBlockInfoDialog(nullptr)
 {
 	ui->setupUi(this);
 	setAcceptDrops(true);
@@ -56,7 +57,9 @@ MainWindow::MainWindow(QWidget *parent)
 	//m_pVerticalLine->point1->setCoords(0, 0);
 	//m_pVerticalLine->point2->setCoords(0, 1);
 	//m_pVerticalLine->setClipToAxisRect(false); // 使垂直线不受单个坐标轴的限制
-	
+	// 连接右键菜单信号
+	ui->customPlot->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(ui->customPlot, &QCustomPlot::customContextMenuRequested, this, &MainWindow::showContextMenu);
 
 }
 
@@ -1002,6 +1005,94 @@ void MainWindow::onMouseMove(QMouseEvent* event)
 		for (auto VerticalLine : m_vecVerticalLine)
 		{
 			VerticalLine->setVisible(false);
+		}
+	}
+}
+
+void MainWindow::showContextMenu(const QPoint& pos)
+{
+	m_rightClickPos = pos; // 记录鼠标右键点击的位置
+	QMenu contextMenu(tr("Context menu"), this);
+
+	QAction actionInformation("Information", this);
+	connect(&actionInformation, &QAction::triggered, this, &MainWindow::showBlockInformation);
+	contextMenu.addAction(&actionInformation);
+
+	contextMenu.exec(ui->customPlot->mapToGlobal(pos));
+}
+
+void MainWindow::showBlockInformation()
+{
+	double x = ui->customPlot->xAxis->pixelToCoord(m_rightClickPos.x());
+
+	double minDist = std::numeric_limits<double>::max();
+	double closestX = 0;
+	bool found = false;
+
+	// 遍历所有 QCPAxisRect 中的所有图表
+	for (auto rect : m_vecRects)
+	{
+		for (int i = 0; i < rect->graphs().size(); ++i)
+		{
+			QCPGraph* graph = rect->graphs().at(i);
+			if (graph)
+			{
+				auto it = graph->data()->findBegin(x);
+				if (it != graph->data()->end())
+				{
+					double dist = std::abs(it->key - x);
+					if (dist < minDist)
+					{
+						minDist = dist;
+						closestX = it->key;
+						found = true;
+					}
+				}
+			}
+		}
+	}
+
+	if (found)
+	{
+		// 计算当前是第多少个 block
+		int currentBlock = -1;
+		for (int i = 0; i < vecBlockEdges.size() - 1; ++i)
+		{
+			if (closestX >= vecBlockEdges[i] && closestX < vecBlockEdges[i + 1])
+			{
+				currentBlock = i;
+				break;
+			}
+		}
+
+		if (currentBlock != -1)
+		{
+			QString blockInfo = QString("Block: %1\nStart Time: %2 %3\nEnd Time: %4 %5")
+				.arg(currentBlock)
+				.arg(vecBlockEdges[currentBlock])
+				.arg(TimeUnits)
+				.arg(vecBlockEdges[currentBlock + 1])
+				.arg(TimeUnits);
+
+			if (!m_pBlockInfoDialog)
+			{
+				m_pBlockInfoDialog = new QDialog(this);
+				m_pBlockInfoDialog->setWindowTitle("Block Information");
+				QVBoxLayout* layout = new QVBoxLayout(m_pBlockInfoDialog);
+				QLabel* label = new QLabel(blockInfo, m_pBlockInfoDialog);
+				layout->addWidget(label);
+				m_pBlockInfoDialog->setLayout(layout);
+			}
+			else
+			{
+				QLabel* label = m_pBlockInfoDialog->findChild<QLabel*>();
+				if (label)
+				{
+					label->setText(blockInfo);
+				}
+			}
+
+			m_pBlockInfoDialog->show();
 		}
 	}
 }

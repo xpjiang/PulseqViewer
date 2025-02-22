@@ -59,6 +59,8 @@ private:
 
 private:
     Ui::MainWindow                       *ui;
+    QPoint m_rightClickPos;
+    QDialog* m_pBlockInfoDialog;
     
 
     QLabel                               *m_pVersionLabel;
@@ -106,6 +108,8 @@ private:
 
 private slots:
     void synchronizeXAxes(const QCPRange& newRange);
+    void showContextMenu(const QPoint& pos);
+    void showBlockInformation();
 };
 
 #endif // MAINWINDOW_H
