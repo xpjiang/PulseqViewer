@@ -28,6 +28,7 @@ public:
         // 创建文本框控件
         textEdit = new QPlainTextEdit(this);
         textEdit->setReadOnly(true);     // 设置为只读模式
+        setWindowFlags(windowFlags() | Qt::WindowMinMaxButtonsHint); // 允许最大化
         textEdit->setWordWrapMode(QTextOption::NoWrap); // 禁用自动换行
 
         // 创建布局并添加控件
@@ -98,7 +99,7 @@ private:
     bool IsBlockRf(const float* fAmp, const float* fPhase, const int& iSamples);
 
     std::tuple<double, size_t> calcRfCenter(const std::vector<double>& signal, const std::vector<double>& t);
-
+    void setBlockInfoContent(int currentBlock);
 private:
     Ui::MainWindow                       *ui;
     QPoint m_rightClickPos;

@@ -1067,27 +1067,84 @@ void MainWindow::showBlockInformation()
 
 		if (currentBlock != -1)
 		{
-			QString blockInfo = QString("Block: %1\nStart Time: %2 %3\nEnd Time: %4 %5")
-				.arg(currentBlock)
-				.arg(vecBlockEdges[currentBlock])
-				.arg(TimeUnits)
-				.arg(vecBlockEdges[currentBlock + 1])
-				.arg(TimeUnits);
 
 			if (!m_pBlockInfoDialog)
 			{
 				m_pBlockInfoDialog = new EventBlockInfoDialog(this);
-				//m_pBlockInfoDialog->setWindowTitle("Block Information");
-				//QVBoxLayout* layout = new QVBoxLayout(m_pBlockInfoDialog);
-				//QLabel* label = new QLabel(blockInfo, m_pBlockInfoDialog);
-				//layout->addWidget(label);
-				//m_pBlockInfoDialog->setLayout(layout);
-				
 			}
 
-			m_pBlockInfoDialog->setInfoContent(blockInfo);
+			setBlockInfoContent(currentBlock);
 
 			m_pBlockInfoDialog->show();
 		}
 	}
+}
+
+void MainWindow::setBlockInfoContent(int currentBlock)
+{
+	QString blockInfo = QString("/-----------------------------------------------------------------------------------------------/\n");
+	blockInfo += QString("Block: %1\nStart Time: %2 %3\nEnd Time: %4 %5\n")
+		.arg(currentBlock)
+		.arg(vecBlockEdges[currentBlock])
+		.arg(TimeUnits)
+		.arg(vecBlockEdges[currentBlock + 1])
+		.arg(TimeUnits);
+
+	
+	const auto& pSeqBlock = m_vecDecodeSeqBlocks[currentBlock];
+	if (pSeqBlock->isRF())
+	{
+		blockInfo += QString("|-----------------------------------------------------------------------------------------------|\n");
+		const RFEvent& rf = pSeqBlock->GetRFEvent();
+		blockInfo += QString("RF Event:\nAmplitude: %1 Hz\nFrequency Offset: %2 Hz\nPhase Offset: %3 rad\nDelay: %4 us\n")
+			.arg(rf.amplitude)
+			.arg(rf.freqOffset)
+			.arg(rf.phaseOffset)
+			.arg(rf.delay);
+	}
+
+	if (pSeqBlock->isADC())
+	{
+		blockInfo += QString("|-----------------------------------------------------------------------------------------------|\n");
+		const ADCEvent& adc = pSeqBlock->GetADCEvent();
+		blockInfo += QString("ADC Event:\nNumber of Samples: %1\nDwell Time: %2 ns\nDelay: %3 us\nFrequency Offset: %4 Hz\nPhase Offset: %5 rad\n")
+			.arg(adc.numSamples)
+			.arg(adc.dwellTime)
+			.arg(adc.delay)
+			.arg(adc.freqOffset)
+			.arg(adc.phaseOffset);
+	}
+
+	std::array<QString, 3> gradChannels = { "Gx", "Gy", "Gz" };
+	for (int channel = 0; channel < 3; ++channel)
+	{
+		if (pSeqBlock->isTrapGradient(channel) || pSeqBlock->isArbitraryGradient(channel) || pSeqBlock->isExtTrapGradient(channel))
+		{
+			blockInfo += QString("|-----------------------------------------------------------------------------------------------|\n");
+			const GradEvent& grad = pSeqBlock->GetGradEvent(channel);
+			blockInfo += QString("Gradient Event (Channel %1):\nAmplitude: %2 Hz/m\nDelay: %3 us")
+				.arg(gradChannels[channel])
+				.arg(grad.amplitude)
+				.arg(grad.delay);
+
+			if (pSeqBlock->isTrapGradient(channel))
+			{
+				blockInfo += QString("\nRamp Up Time: %1 us\nFlat Time: %2 us\nRamp Down Time: %3 us")
+					.arg(grad.rampUpTime)
+					.arg(grad.flatTime)
+					.arg(grad.rampDownTime);
+			}
+			else if (pSeqBlock->isArbitraryGradient(channel))
+			{
+				blockInfo += QString("\nWave Shape ID: %1\nTime Shape ID: %2")
+					.arg(grad.waveShape)
+					.arg(grad.timeShape);
+			}
+
+			blockInfo += QString("\n");
+		}
+	}
+
+	blockInfo += QString("\\-----------------------------------------------------------------------------------------------\\");
+	m_pBlockInfoDialog->setInfoContent(blockInfo);
 }
