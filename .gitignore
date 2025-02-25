@@ -30,3 +30,8 @@
 *.exe
 *.out
 *.app
+
+build*/
+.vs
+/CMakePresets.json
+/CMakeUserPresets.json
